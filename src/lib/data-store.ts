@@ -28,62 +28,10 @@ const INITIAL_SECTIONS: UploadSection[] = [
   },
 ];
 
-const INITIAL_SUBMISSIONS: Submission[] = [
-  {
-    id: 'd4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a',
-    upload_section_id: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
-    name: 'PRAVEEN G',
-    roll_number: '25CS174',
-    department: 'CSE',
-    file_name: 'Java_Project_Report_Praveen.pdf',
-    file_path: 'java-project-report/25CS174/Java_Project_Report_Praveen.pdf',
-    file_url: '/sample-document.pdf',
-    file_size: 2457600,
-    mime_type: 'application/pdf',
-    submission_status: 'Verified',
-    xerox_status: 'Printed',
-    payment_status: 'Paid',
-    uploaded_at: '2026-09-27T09:00:00Z',
-    updated_at: '2026-09-27T09:00:00Z',
-  },
-  {
-    id: 'e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b',
-    upload_section_id: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
-    name: 'PRIYA R',
-    roll_number: '25CS175',
-    department: 'CSE',
-    file_name: 'Java_Report_Final_Priya.pdf',
-    file_path: 'java-project-report/25CS175/Java_Report_Final_Priya.pdf',
-    file_url: '/sample-document.pdf',
-    file_size: 3145728,
-    mime_type: 'application/pdf',
-    submission_status: 'Verified',
-    xerox_status: 'Ready to Print',
-    payment_status: 'Pending',
-    uploaded_at: '2026-09-27T09:05:00Z',
-    updated_at: '2026-09-27T09:05:00Z',
-  },
-  {
-    id: 'f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c',
-    upload_section_id: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
-    name: 'RAHUL M',
-    roll_number: '25CS180',
-    department: 'IT',
-    file_name: 'Rahul_Java_MiniProject.pdf',
-    file_path: 'java-project-report/25CS180/Rahul_Java_MiniProject.pdf',
-    file_url: '/sample-document.pdf',
-    file_size: 1845720,
-    mime_type: 'application/pdf',
-    submission_status: 'Uploaded',
-    xerox_status: 'Pending',
-    payment_status: 'Pending',
-    uploaded_at: '2026-09-27T09:10:00Z',
-    updated_at: '2026-09-27T09:10:00Z',
-  },
-];
+const INITIAL_SUBMISSIONS: Submission[] = [];
 
-const SECTIONS_STORAGE_KEY = 'printtrack_sections_v2';
-const SUBMISSIONS_STORAGE_KEY = 'printtrack_submissions_v2';
+const SECTIONS_STORAGE_KEY = 'printtrack_sections_v3';
+const SUBMISSIONS_STORAGE_KEY = 'printtrack_submissions_v3';
 
 // In-memory cache for server-side execution
 let memorySections = [...INITIAL_SECTIONS];
