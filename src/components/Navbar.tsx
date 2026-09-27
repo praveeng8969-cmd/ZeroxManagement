@@ -30,19 +30,8 @@ export function Navbar() {
           </div>
         </Link>
 
-        {/* Navigation links */}
+        {/* Navigation links - completely clean, no public admin link */}
         <nav className="flex items-center gap-4">
-          <Link
-            href="/admin"
-            className={`text-sm font-medium transition-colors ${
-              pathname?.startsWith('/admin')
-                ? 'text-sky-600 font-semibold'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            /admin
-          </Link>
-
           {isAdminRoute && (
             <Link
               href="/"
