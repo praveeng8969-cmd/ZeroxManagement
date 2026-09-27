@@ -25,20 +25,22 @@ export function Navbar() {
               </span>
             </div>
             <p className="text-[11px] text-slate-500 font-medium leading-none">
-              Upload. Print. Track.
+              Print. Track.
             </p>
           </div>
         </Link>
 
-        {/* Navigation links - NO admin login logo or button on public site */}
+        {/* Navigation links */}
         <nav className="flex items-center gap-4">
           <Link
-            href="/"
-            className={`text-sm font-semibold transition-colors ${
-              pathname === '/' ? 'text-sky-600' : 'text-slate-600 hover:text-slate-900'
+            href="/admin"
+            className={`text-sm font-medium transition-colors ${
+              pathname?.startsWith('/admin')
+                ? 'text-sky-600 font-semibold'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Upload
+            /admin
           </Link>
 
           {isAdminRoute && (
