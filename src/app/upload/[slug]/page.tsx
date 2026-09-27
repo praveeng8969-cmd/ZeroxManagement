@@ -4,7 +4,7 @@ import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { UploadSection, Submission } from '@/types';
 import { DataStore } from '@/lib/data-store';
-import { calculatePrintAmount, formatCurrency, formatDate, formatBytes, isFileTypeAllowed } from '@/lib/utils';
+import { calculatePrintAmount, formatCurrency, formatDate, formatBytes } from '@/lib/utils';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Modal } from '@/components/Modal';
 import { PDFDocument } from 'pdf-lib';
@@ -38,7 +38,6 @@ export default function UploadPage({ params }: UploadPageProps) {
   const [rollNumber, setRollNumber] = useState('');
   const [department, setDepartment] = useState('');
   const [pageCount, setPageCount] = useState('');
-  const [pageCountDetected, setPageCountDetected] = useState(false);
   const [detectingPages, setDetectingPages] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -114,7 +113,6 @@ export default function UploadPage({ params }: UploadPageProps) {
     setErrorMessage('');
     setFile(null);
     setPageCount('');
-    setPageCountDetected(false);
     if (!section) return;
 
     // Check size
@@ -125,35 +123,25 @@ export default function UploadPage({ params }: UploadPageProps) {
       return;
     }
 
-    // Check allowed extension
-    const allowed = isFileTypeAllowed(selectedFile.name, selectedFile.type, section.allowed_file_types);
-    if (!allowed) {
-      setErrorMessage(
-        `Invalid file type. Allowed formats: ${section.allowed_file_types.join(', ').toUpperCase()}`
-      );
-      setFile(null);
+    const isPdf = selectedFile.type.includes('pdf') || selectedFile.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setErrorMessage('Automatic page pricing requires a PDF file. Please convert your document to PDF and upload it again.');
       return;
     }
 
-    const isPdf = selectedFile.type.includes('pdf') || selectedFile.name.toLowerCase().endsWith('.pdf');
-    if (isPdf) {
-      setDetectingPages(true);
-      try {
-        const pdf = await PDFDocument.load(await selectedFile.arrayBuffer());
-        const detectedPages = pdf.getPageCount();
-        if (detectedPages < 1) throw new Error('The PDF does not contain any pages.');
-        setPageCount(String(detectedPages));
-        setPageCountDetected(true);
-      } catch {
-        setFile(null);
-        setPageCount('');
-        setErrorMessage('Could not read the PDF page count. Please upload a valid, unlocked PDF.');
-        return;
-      } finally {
-        setDetectingPages(false);
-      }
-    } else {
+    setDetectingPages(true);
+    try {
+      const pdf = await PDFDocument.load(await selectedFile.arrayBuffer());
+      const detectedPages = pdf.getPageCount();
+      if (detectedPages < 1) throw new Error('The PDF does not contain any pages.');
+      setPageCount(String(detectedPages));
+    } catch {
+      setFile(null);
       setPageCount('');
+      setErrorMessage('Could not read the PDF page count. Please upload a valid, unlocked PDF.');
+      return;
+    } finally {
+      setDetectingPages(false);
     }
 
     setFile(selectedFile);
@@ -485,7 +473,7 @@ export default function UploadPage({ params }: UploadPageProps) {
                 </div>
 
                 {/* Department (Optional) */}
-                <div>
+                <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                     Department / Class <span className="text-slate-400 font-normal">(Optional)</span>
                   </label>
@@ -498,26 +486,6 @@ export default function UploadPage({ params }: UploadPageProps) {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Number of Pages <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    required
-                    value={pageCount}
-                    onChange={(e) => setPageCount(e.target.value)}
-                    readOnly={pageCountDetected || detectingPages}
-                    placeholder={detectingPages ? 'Detecting PDF pages...' : 'e.g. 50'}
-                    className={`w-full rounded-lg border border-slate-200 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-hidden ${pageCountDetected ? 'bg-emerald-50 font-bold' : 'bg-white'}`}
-                  />
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    {pageCountDetected ? 'Automatically detected from the PDF. ' : 'For non-PDF files, enter the printed page count. '}
-                    Total: {formatCurrency(calculatePrintAmount(Number(pageCount) || 0, section.xerox_rate, section.extra_charge))}
-                  </p>
-                </div>
               </div>
 
               {/* Drag and Drop File Area */}
@@ -544,9 +512,7 @@ export default function UploadPage({ params }: UploadPageProps) {
                     id="file-upload"
                     className="absolute inset-0 cursor-pointer opacity-0"
                     onChange={handleFileChange}
-                    accept={section.allowed_file_types
-                      .map((t) => (t === 'images' ? 'image/*' : `.${t}`))
-                      .join(',')}
+                    accept=".pdf,application/pdf"
                   />
 
                   {file ? (
@@ -556,6 +522,9 @@ export default function UploadPage({ params }: UploadPageProps) {
                       </div>
                       <p className="text-sm font-bold text-slate-900 max-w-sm truncate">{file.name}</p>
                       <p className="text-xs text-slate-500 mt-0.5">{formatBytes(file.size)}</p>
+                      <p className="text-xs font-semibold text-emerald-700 mt-1">
+                        {pageCount} pages • {formatCurrency(calculatePrintAmount(Number(pageCount), section.xerox_rate, section.extra_charge))}
+                      </p>
                       <span className="mt-2 text-xs font-medium text-sky-600 hover:underline">
                         Click or drag to choose a different file
                       </span>
@@ -566,10 +535,10 @@ export default function UploadPage({ params }: UploadPageProps) {
                         <Upload className="h-6 w-6" />
                       </div>
                       <p className="text-sm font-semibold text-slate-800">
-                        Drop your document here, or <span className="text-sky-600">browse</span>
+                        {detectingPages ? 'Reading PDF and calculating price...' : <>Drop your PDF here, or <span className="text-sky-600">browse</span></>}
                       </p>
                       <p className="text-xs text-slate-400 mt-1">
-                        Accepted: {section.allowed_file_types.join(', ').toUpperCase()} • Max {section.max_file_size} MB
+                        PDF only • Page count and price calculated automatically • Max {section.max_file_size} MB
                       </p>
                     </div>
                   )}
@@ -606,7 +575,11 @@ export default function UploadPage({ params }: UploadPageProps) {
                 ) : (
                   <>
                     <Upload className="h-4 w-4" />
-                    <span>Upload Report ({formatCurrency(calculatePrintAmount(Number(pageCount) || 0, section.xerox_rate, section.extra_charge))})</span>
+                    <span>
+                      {file
+                        ? `Upload Report (${formatCurrency(calculatePrintAmount(Number(pageCount), section.xerox_rate, section.extra_charge))})`
+                        : 'Upload Report'}
+                    </span>
                   </>
                 )}
               </button>
