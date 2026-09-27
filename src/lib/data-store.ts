@@ -32,10 +32,18 @@ const INITIAL_SUBMISSIONS: Submission[] = [];
 
 const SECTIONS_STORAGE_KEY = 'printtrack_sections_v3';
 const SUBMISSIONS_STORAGE_KEY = 'printtrack_submissions_v3';
+const SECTIONS_UPDATED_KEY = 'printtrack_sections_updated_at';
 
 // In-memory cache for server-side execution
 let memorySections = [...INITIAL_SECTIONS];
 let memorySubmissions = [...INITIAL_SUBMISSIONS];
+
+function notifySectionsUpdated() {
+  if (typeof window === 'undefined') return;
+
+  window.dispatchEvent(new Event('printtrack_sections_updated'));
+  localStorage.setItem(SECTIONS_UPDATED_KEY, new Date().toISOString());
+}
 
 function getStoredSections(): UploadSection[] {
   if (typeof window === 'undefined') {
@@ -59,7 +67,7 @@ function saveStoredSections(sections: UploadSection[]) {
   if (typeof window !== 'undefined') {
     try {
       localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify(sections));
-      window.dispatchEvent(new Event('printtrack_sections_updated'));
+      notifySectionsUpdated();
     } catch (e) {
       console.error('Storage write error', e);
     }
@@ -187,19 +195,18 @@ export const DataStore = {
     };
 
     if (isSupabaseConfigured() && supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('upload_sections')
-          .insert([newSection])
-          .select()
-          .single();
+      const { data, error } = await supabase
+        .from('upload_sections')
+        .insert([newSection])
+        .select()
+        .single();
 
-        if (!error && data) {
-          return { ...data, submissions_count: 0 };
-        }
-      } catch (err) {
-        console.warn('Supabase createSection fallback', err);
+      if (error) {
+        throw new Error(`Unable to create upload section: ${error.message}`);
       }
+
+      notifySectionsUpdated();
+      return { ...data, submissions_count: 0 };
     }
 
     const sections = getStoredSections();
@@ -210,20 +217,19 @@ export const DataStore = {
 
   async updateSection(id: string, updates: Partial<UploadSection>): Promise<UploadSection | null> {
     if (isSupabaseConfigured() && supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('upload_sections')
-          .update({ ...updates, updated_at: new Date().toISOString() })
-          .eq('id', id)
-          .select()
-          .single();
+      const { data, error } = await supabase
+        .from('upload_sections')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
 
-        if (!error && data) {
-          return data;
-        }
-      } catch (err) {
-        console.warn('Supabase updateSection fallback', err);
+      if (error) {
+        throw new Error(`Unable to save upload section: ${error.message}`);
       }
+
+      notifySectionsUpdated();
+      return data;
     }
 
     const sections = getStoredSections();

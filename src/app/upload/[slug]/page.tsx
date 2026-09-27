@@ -51,17 +51,37 @@ export default function UploadPage({ params }: UploadPageProps) {
   const [successSubmission, setSuccessSubmission] = useState<Submission | null>(null);
 
   useEffect(() => {
+    let active = true;
+
     async function loadSection() {
       try {
         const found = await DataStore.getSectionBySlug(resolvedParams.slug);
-        setSection(found);
+        if (active) setSection(found);
       } catch (err) {
         console.error(err);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') loadSection();
+    };
+
     loadSection();
+
+    window.addEventListener('printtrack_sections_updated', loadSection);
+    window.addEventListener('storage', loadSection);
+    window.addEventListener('focus', loadSection);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      active = false;
+      window.removeEventListener('printtrack_sections_updated', loadSection);
+      window.removeEventListener('storage', loadSection);
+      window.removeEventListener('focus', loadSection);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [resolvedParams.slug]);
 
   const handleDrag = (e: React.DragEvent) => {
