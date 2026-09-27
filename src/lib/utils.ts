@@ -20,7 +20,8 @@ export function calculatePrintAmount(
   pricePerPage = 1.5,
   extraCharge = 40
 ): number {
-  return Math.max(0, pageCount) * Math.max(0, pricePerPage) + Math.max(0, extraCharge);
+  const amount = Math.max(0, pageCount) * Math.max(0, pricePerPage) + Math.max(0, extraCharge);
+  return Math.ceil(amount / 5) * 5;
 }
 
 export function formatDate(dateString: string | null | undefined): string {
