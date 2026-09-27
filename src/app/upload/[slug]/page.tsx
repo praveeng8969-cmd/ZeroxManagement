@@ -7,6 +7,7 @@ import { DataStore } from '@/lib/data-store';
 import { calculatePrintAmount, formatCurrency, formatDate, formatBytes, isFileTypeAllowed } from '@/lib/utils';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Modal } from '@/components/Modal';
+import { PDFDocument } from 'pdf-lib';
 import {
   Upload,
   FileText,
@@ -37,6 +38,8 @@ export default function UploadPage({ params }: UploadPageProps) {
   const [rollNumber, setRollNumber] = useState('');
   const [department, setDepartment] = useState('');
   const [pageCount, setPageCount] = useState('');
+  const [pageCountDetected, setPageCountDetected] = useState(false);
+  const [detectingPages, setDetectingPages] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
@@ -97,18 +100,21 @@ export default function UploadPage({ params }: UploadPageProps) {
     e.stopPropagation();
     setDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      validateAndSetFile(e.dataTransfer.files[0]);
+      void validateAndSetFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      validateAndSetFile(e.target.files[0]);
+      void validateAndSetFile(e.target.files[0]);
     }
   };
 
-  const validateAndSetFile = (selectedFile: File) => {
+  const validateAndSetFile = async (selectedFile: File) => {
     setErrorMessage('');
+    setFile(null);
+    setPageCount('');
+    setPageCountDetected(false);
     if (!section) return;
 
     // Check size
@@ -127,6 +133,27 @@ export default function UploadPage({ params }: UploadPageProps) {
       );
       setFile(null);
       return;
+    }
+
+    const isPdf = selectedFile.type.includes('pdf') || selectedFile.name.toLowerCase().endsWith('.pdf');
+    if (isPdf) {
+      setDetectingPages(true);
+      try {
+        const pdf = await PDFDocument.load(await selectedFile.arrayBuffer());
+        const detectedPages = pdf.getPageCount();
+        if (detectedPages < 1) throw new Error('The PDF does not contain any pages.');
+        setPageCount(String(detectedPages));
+        setPageCountDetected(true);
+      } catch {
+        setFile(null);
+        setPageCount('');
+        setErrorMessage('Could not read the PDF page count. Please upload a valid, unlocked PDF.');
+        return;
+      } finally {
+        setDetectingPages(false);
+      }
+    } else {
+      setPageCount('');
     }
 
     setFile(selectedFile);
@@ -480,12 +507,14 @@ export default function UploadPage({ params }: UploadPageProps) {
                     min="1"
                     step="1"
                     required
-                    placeholder="e.g. 50"
                     value={pageCount}
                     onChange={(e) => setPageCount(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-hidden"
+                    readOnly={pageCountDetected || detectingPages}
+                    placeholder={detectingPages ? 'Detecting PDF pages...' : 'e.g. 50'}
+                    className={`w-full rounded-lg border border-slate-200 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-hidden ${pageCountDetected ? 'bg-emerald-50 font-bold' : 'bg-white'}`}
                   />
                   <p className="mt-1 text-[11px] text-slate-400">
+                    {pageCountDetected ? 'Automatically detected from the PDF. ' : 'For non-PDF files, enter the printed page count. '}
                     Total: {formatCurrency(calculatePrintAmount(Number(pageCount) || 0, section.xerox_rate, section.extra_charge))}
                   </p>
                 </div>
