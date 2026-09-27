@@ -230,6 +230,38 @@ export const DataStore = {
         throw new Error(`Unable to save upload section: ${error.message}`);
       }
 
+      if ('xerox_rate' in updates || 'extra_charge' in updates) {
+        const { data: sectionSubmissions, error: submissionsError } = await supabase
+          .from('submissions')
+          .select('id, page_count')
+          .eq('upload_section_id', id);
+
+        if (submissionsError) {
+          throw new Error(`Pricing saved, but existing totals could not be loaded: ${submissionsError.message}`);
+        }
+
+        const pricePerPage = Number(data.xerox_rate) || 0;
+        const extraCharge = Number(data.extra_charge) || 0;
+        const priceUpdates = (sectionSubmissions || []).map((submission) =>
+          supabase!
+            .from('submissions')
+            .update({
+              amount: calculatePrintAmount(
+                Number(submission.page_count) || 1,
+                pricePerPage,
+                extraCharge
+              ),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', submission.id)
+        );
+        const results = await Promise.all(priceUpdates);
+        const pricingError = results.find((result) => result.error)?.error;
+        if (pricingError) {
+          throw new Error(`Pricing saved, but existing totals could not be updated: ${pricingError.message}`);
+        }
+      }
+
       notifySectionsUpdated();
       return data;
     }
@@ -245,6 +277,23 @@ export const DataStore = {
     };
     sections[index] = updated;
     saveStoredSections(sections);
+
+    if ('xerox_rate' in updates || 'extra_charge' in updates) {
+      const submissions = getStoredSubmissions().map((submission) =>
+        submission.upload_section_id === id
+          ? {
+              ...submission,
+              amount: calculatePrintAmount(
+                Number(submission.page_count) || 1,
+                Number(updated.xerox_rate) || 0,
+                Number(updated.extra_charge) || 0
+              ),
+              updated_at: new Date().toISOString(),
+            }
+          : submission
+      );
+      saveStoredSubmissions(submissions);
+    }
     return updated;
   },
 

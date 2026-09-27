@@ -280,7 +280,8 @@ export default function AdminAllSubmissionsPage() {
                         filtered.length > 0 && selectedIds.length === filtered.length
                       }
                       onChange={handleSelectAll}
-                      className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                      aria-label="Select all visible submissions"
+                      className="h-4 w-4 cursor-pointer rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                     />
                   </th>
                   <th className="py-3 px-3">Roll No</th>
@@ -306,12 +307,15 @@ export default function AdminAllSubmissionsPage() {
                       }`}
                     >
                       <td className="py-3 px-3">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleSelectOne(sub.id)}
-                          className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                        />
+                        <label className="flex h-8 w-8 cursor-pointer items-center justify-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleSelectOne(sub.id)}
+                            aria-label={`Select submission ${sub.roll_number}`}
+                            className="h-4 w-4 cursor-pointer rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                          />
+                        </label>
                       </td>
 
                       <td className="py-3 px-3 font-mono font-bold text-slate-900">
