@@ -23,7 +23,6 @@ export default function CreateUploadSectionPage() {
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState('2026-10-31T23:59');
-  const [xeroxRate, setXeroxRate] = useState('25');
   const [allowedFileTypes, setAllowedFileTypes] = useState<string[]>(['pdf']);
   const [maxFileSize, setMaxFileSize] = useState('10');
   const [status, setStatus] = useState<UploadSectionStatus>('open');
@@ -69,7 +68,6 @@ export default function CreateUploadSectionPage() {
         slug: slug.trim(),
         description: description.trim(),
         deadline: new Date(deadline).toISOString(),
-        xerox_rate: parseFloat(xeroxRate) || 0,
         allowed_file_types: allowedFileTypes,
         max_file_size: parseInt(maxFileSize) || 10,
         status,
@@ -164,30 +162,8 @@ export default function CreateUploadSectionPage() {
             />
           </div>
 
-          {/* Rates and Deadline Grid */}
+          {/* Section settings */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Xerox Rate */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Xerox Rate per Student (₹) <span className="text-rose-500">*</span>
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
-                  ₹
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  required
-                  placeholder="25"
-                  value={xeroxRate}
-                  onChange={(e) => setXeroxRate(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-7 pr-3 text-sm font-bold text-slate-900 focus:border-sky-500 focus:outline-hidden"
-                />
-              </div>
-            </div>
-
             {/* Deadline */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">

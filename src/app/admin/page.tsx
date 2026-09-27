@@ -215,7 +215,7 @@ export default function AdminDashboardPage() {
                       {sec.title}
                     </Link>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      Rate: <span className="font-semibold text-emerald-700">{formatCurrency(sec.xerox_rate)}</span> • {sec.submissions_count ?? 0} files
+                      ₹1.50/page + ₹40 calico • {sec.submissions_count ?? 0} files
                     </p>
                   </div>
                   <StatusBadge status={sec.status} size="sm" />

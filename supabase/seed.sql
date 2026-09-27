@@ -11,7 +11,7 @@ values
     'java-project-report',
     'Upload your completed Java project report including source code documentation and test screenshots.',
     '2026-09-30 23:59:59+00',
-    25.00,
+    0.00,
     array['pdf'],
     10,
     'open',

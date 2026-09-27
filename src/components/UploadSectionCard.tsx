@@ -2,8 +2,8 @@ import React from 'react';
 import Link from 'next/link';
 import { UploadSection } from '@/types';
 import { StatusBadge } from './StatusBadge';
-import { formatCurrency, formatDateShort } from '@/lib/utils';
-import { Calendar, FileText, Upload, Users, IndianRupee, ArrowRight, Lock } from 'lucide-react';
+import { formatDateShort } from '@/lib/utils';
+import { Calendar, FileText, Upload, Users, ArrowRight, Lock } from 'lucide-react';
 
 interface UploadSectionCardProps {
   section: UploadSection;
@@ -30,14 +30,14 @@ export function UploadSectionCard({ section }: UploadSectionCardProps) {
 
         {/* Metadata Grid */}
         <div className="grid grid-cols-2 gap-2.5 rounded-lg bg-slate-50/80 p-3 text-xs mb-5 border border-slate-100">
-          {/* Xerox Rate */}
+          {/* Pricing */}
           <div className="flex items-center gap-2">
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white text-emerald-600 shadow-2xs border border-slate-100 font-semibold">
               ₹
             </span>
             <div>
-              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Rate</span>
-              <span className="font-bold text-slate-900 text-sm">{formatCurrency(section.xerox_rate)}</span>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Pricing</span>
+              <span className="font-bold text-slate-900 text-xs">₹1.50/page + ₹40</span>
             </div>
           </div>
 

@@ -33,6 +33,8 @@ export interface Submission {
   file_url?: string;
   file_size: number;
   mime_type: string;
+  page_count: number;
+  amount: number;
   submission_status: FileStatus;
   xerox_status: XeroxStatus;
   payment_status: PaymentStatus;
@@ -57,7 +59,6 @@ export interface SectionFinancialSummary {
   title: string;
   slug: string;
   status: UploadSectionStatus;
-  xerox_rate: number;
   submissions_count: number;
   paid_count: number;
   pending_count: number;
@@ -71,7 +72,6 @@ export interface CreateSectionInput {
   slug: string;
   description: string;
   deadline: string;
-  xerox_rate: number;
   allowed_file_types: string[];
   max_file_size: number;
   status: UploadSectionStatus;

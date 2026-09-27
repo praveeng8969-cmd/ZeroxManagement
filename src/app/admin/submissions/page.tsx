@@ -345,7 +345,9 @@ export default function AdminAllSubmissionsPage() {
                         >
                           {sub.file_name}
                         </button>
-                        <span className="text-[10px] text-slate-400">{formatBytes(sub.file_size)}</span>
+                        <span className="text-[10px] text-slate-400">
+                          {formatBytes(sub.file_size)} • {sub.page_count} pages • {formatCurrency(sub.amount)}
+                        </span>
                       </td>
 
                       <td className="py-3 px-3 whitespace-nowrap">

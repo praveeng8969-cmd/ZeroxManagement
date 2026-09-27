@@ -9,6 +9,7 @@ import {
   PaymentStatus,
 } from '@/types';
 import { supabase, isSupabaseConfigured } from './supabase/client';
+import { calculatePrintAmount } from './utils';
 
 // Initial pre-configured seed data matching user prompt requirements: only Java Project Report
 const INITIAL_SECTIONS: UploadSection[] = [
@@ -18,7 +19,7 @@ const INITIAL_SECTIONS: UploadSection[] = [
     slug: 'java-project-report',
     description: 'Upload your completed Java project report including source code documentation and test screenshots.',
     deadline: '2026-09-30T23:59:59Z',
-    xerox_rate: 25,
+    xerox_rate: 0,
     allowed_file_types: ['pdf'],
     max_file_size: 10,
     status: 'open',
@@ -188,6 +189,7 @@ export const DataStore = {
   async createSection(input: CreateSectionInput): Promise<UploadSection> {
     const newSection: UploadSection = {
       ...input,
+      xerox_rate: 0,
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'sec-' + Date.now(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -311,6 +313,7 @@ export const DataStore = {
     fileName: string;
     fileSize: number;
     mimeType: string;
+    pageCount: number;
     fileBlobUrl?: string;
     replaceExisting?: boolean;
   }): Promise<{ submission: Submission; replaced: boolean }> {
@@ -339,6 +342,8 @@ export const DataStore = {
         file_url: params.fileBlobUrl || existing.file_url,
         file_size: params.fileSize,
         mime_type: params.mimeType,
+        page_count: params.pageCount,
+        amount: calculatePrintAmount(params.pageCount),
         uploaded_at: new Date().toISOString(),
         submission_status: 'Uploaded', // Reset verification on replacement as requested
         // Preserve payment/Xerox status unless altered by admin
@@ -375,6 +380,8 @@ export const DataStore = {
       file_url: params.fileBlobUrl || '/sample-document.pdf',
       file_size: params.fileSize,
       mime_type: params.mimeType,
+      page_count: params.pageCount,
+      amount: calculatePrintAmount(params.pageCount),
       submission_status: 'Uploaded',
       xerox_status: 'Pending',
       payment_status: 'Pending',
@@ -513,21 +520,16 @@ export const DataStore = {
     let expected_amount = 0;
     let received_amount = 0;
 
-    const sectionRateMap = new Map<string, number>();
-    sections.forEach((sec) => {
-      sectionRateMap.set(sec.id, Number(sec.xerox_rate) || 0);
-    });
-
     submissions.forEach((sub) => {
       if (sub.xerox_status === 'Ready to Print') ready_to_print++;
       if (sub.xerox_status === 'Printed') printed++;
       if (sub.xerox_status === 'Taken') xerox_taken++;
 
-      const rate = sectionRateMap.get(sub.upload_section_id) || 0;
-      expected_amount += rate;
+      const amount = Number(sub.amount) || 0;
+      expected_amount += amount;
 
       if (sub.payment_status === 'Paid') {
-        received_amount += rate;
+        received_amount += amount;
       }
     });
 
@@ -551,20 +553,20 @@ export const DataStore = {
 
     return sections.map((sec) => {
       const secSubs = submissions.filter((s) => s.upload_section_id === sec.id);
-      const rate = Number(sec.xerox_rate) || 0;
       const count = secSubs.length;
       const paid = secSubs.filter((s) => s.payment_status === 'Paid').length;
       const pending = count - paid;
-      const expected = count * rate;
-      const received = paid * rate;
-      const pendingAmt = pending * rate;
+      const expected = secSubs.reduce((total, sub) => total + (Number(sub.amount) || 0), 0);
+      const received = secSubs
+        .filter((sub) => sub.payment_status === 'Paid')
+        .reduce((total, sub) => total + (Number(sub.amount) || 0), 0);
+      const pendingAmt = expected - received;
 
       return {
         section_id: sec.id,
         title: sec.title,
         slug: sec.slug,
         status: sec.status,
-        xerox_rate: rate,
         submissions_count: count,
         paid_count: paid,
         pending_count: pending,

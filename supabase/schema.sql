@@ -37,6 +37,8 @@ create table if not exists public.submissions (
     file_url text,
     file_size bigint not null,
     mime_type text not null,
+    page_count integer not null default 1 check (page_count > 0),
+    amount numeric(10, 2) not null default 41.50 check (amount >= 0),
     submission_status text not null default 'Uploaded' check (submission_status in ('Uploaded', 'Verified', 'Rejected')),
     xerox_status text not null default 'Pending' check (xerox_status in ('Pending', 'Ready to Print', 'Printed', 'Taken')),
     payment_status text not null default 'Pending' check (payment_status in ('Pending', 'Paid')),
@@ -49,6 +51,10 @@ create table if not exists public.submissions (
 create index if not exists idx_submissions_section on public.submissions (upload_section_id);
 create index if not exists idx_submissions_roll on public.submissions (roll_number);
 create index if not exists idx_submissions_statuses on public.submissions (submission_status, xerox_status, payment_status);
+
+-- Safe migration for projects created with an older schema.
+alter table public.submissions add column if not exists page_count integer not null default 1;
+alter table public.submissions add column if not exists amount numeric(10, 2) not null default 41.50;
 
 -- 3. PAYMENTS AUDIT TABLE (Optional extension for fine-grained tracking)
 create table if not exists public.payments (

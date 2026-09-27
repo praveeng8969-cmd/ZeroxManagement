@@ -196,18 +196,17 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
   });
 
   // Calculate Section Specific Metrics
-  const rate = Number(section.xerox_rate) || 0;
   const totalSubmissions = submissions.length;
   const verifiedCount = submissions.filter((s) => s.submission_status === 'Verified').length;
   const readyCount = submissions.filter((s) => s.xerox_status === 'Ready to Print').length;
   const printedCount = submissions.filter((s) => s.xerox_status === 'Printed').length;
   const takenCount = submissions.filter((s) => s.xerox_status === 'Taken').length;
   const paidCount = submissions.filter((s) => s.payment_status === 'Paid').length;
-  const unpaidCount = totalSubmissions - paidCount;
-
-  const expectedRevenue = totalSubmissions * rate;
-  const receivedRevenue = paidCount * rate;
-  const pendingRevenue = unpaidCount * rate;
+  const expectedRevenue = submissions.reduce((total, sub) => total + (Number(sub.amount) || 0), 0);
+  const receivedRevenue = submissions
+    .filter((sub) => sub.payment_status === 'Paid')
+    .reduce((total, sub) => total + (Number(sub.amount) || 0), 0);
+  const pendingRevenue = expectedRevenue - receivedRevenue;
 
   return (
     <div className="space-y-6">
@@ -279,8 +278,8 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
 
           <div className="flex gap-4 rounded-xl bg-slate-50 border border-slate-100 p-3.5 text-xs shrink-0">
             <div>
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Xerox Rate</span>
-              <span className="text-lg font-bold text-emerald-700">{formatCurrency(rate)}</span>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Pricing</span>
+              <span className="font-bold text-emerald-700">₹1.50/page + ₹40 calico</span>
             </div>
             <div className="border-l border-slate-200 pl-4">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Deadline</span>
@@ -487,7 +486,7 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
                           {sub.file_name}
                         </button>
                         <span className="text-[10px] text-slate-400">
-                          {formatBytes(sub.file_size)}
+                          {formatBytes(sub.file_size)} • {sub.page_count} pages • {formatCurrency(sub.amount)}
                         </span>
                       </td>
 
@@ -648,8 +647,12 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
                 <span className="font-medium text-slate-700">{formatDate(previewSub.uploaded_at)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Xerox Rate:</span>
-                <span className="font-bold text-emerald-700">{formatCurrency(rate)}</span>
+                <span className="text-slate-500">Pages:</span>
+                <span className="font-medium text-slate-700">{previewSub.page_count}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Amount Due:</span>
+                <span className="font-bold text-emerald-700">{formatCurrency(previewSub.amount)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Payment Status:</span>

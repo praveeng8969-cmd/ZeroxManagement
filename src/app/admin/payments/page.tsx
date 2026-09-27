@@ -141,7 +141,6 @@ export default function AdminPaymentsPage() {
             <thead className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               <tr>
                 <th className="py-3 px-4">Upload Section</th>
-                <th className="py-3 px-4">Rate</th>
                 <th className="py-3 px-4">Submissions</th>
                 <th className="py-3 px-4">Paid Users</th>
                 <th className="py-3 px-4">Unpaid Users</th>
@@ -161,9 +160,6 @@ export default function AdminPaymentsPage() {
                       {sec.title}
                     </Link>
                     <span className="text-[10px] text-slate-400">/{sec.slug}</span>
-                  </td>
-                  <td className="py-3 px-4 font-semibold text-slate-800">
-                    {formatCurrency(sec.xerox_rate)}
                   </td>
                   <td className="py-3 px-4 font-medium text-slate-700">
                     {sec.submissions_count}
@@ -278,7 +274,7 @@ export default function AdminPaymentsPage() {
               {filteredSubmissions.length > 0 ? (
                 filteredSubmissions.map((sub) => {
                   const sec = sections.find((s) => s.id === sub.upload_section_id);
-                  const rate = sec?.xerox_rate ?? 0;
+                  const amount = Number(sub.amount) || 0;
                   const isPaid = sub.payment_status === 'Paid';
 
                   return (
@@ -299,7 +295,8 @@ export default function AdminPaymentsPage() {
                       </td>
 
                       <td className="py-3 px-4 font-bold text-slate-900">
-                        {formatCurrency(rate)}
+                        {formatCurrency(amount)}
+                        <span className="block text-[10px] font-normal text-slate-400">{sub.page_count} pages</span>
                       </td>
 
                       <td className="py-3 px-4">
@@ -323,7 +320,7 @@ export default function AdminPaymentsPage() {
                             onClick={() => handleTogglePayment(sub)}
                             className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 shadow-2xs"
                           >
-                            Mark Paid ({formatCurrency(rate)})
+                            Mark Paid ({formatCurrency(amount)})
                           </button>
                         )}
                       </td>
