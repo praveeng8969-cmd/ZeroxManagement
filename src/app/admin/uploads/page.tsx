@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { UploadSection } from '@/types';
 import { DataStore } from '@/lib/data-store';
-import { formatDateShort } from '@/lib/utils';
+import { formatCurrency, formatDateShort } from '@/lib/utils';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Modal } from '@/components/Modal';
 import {
@@ -143,7 +143,7 @@ export default function AdminUploadsPage() {
 
                     {/* Pricing */}
                     <td className="py-3.5 px-4 font-semibold text-emerald-700">
-                      ₹1.50/page + ₹40
+                      {formatCurrency(sec.xerox_rate)}/page + {formatCurrency(sec.extra_charge)}
                     </td>
 
                     {/* Submissions count */}

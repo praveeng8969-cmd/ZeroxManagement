@@ -151,9 +151,6 @@ export default function UploadPage({ params }: UploadPageProps) {
         });
       }, 150);
 
-      // Create object URL for local preview/download if needed
-      const fileBlobUrl = URL.createObjectURL(file);
-
       const res = await DataStore.createOrReplaceSubmission({
         upload_section_id: section.id,
         name,
@@ -163,7 +160,7 @@ export default function UploadPage({ params }: UploadPageProps) {
         fileSize: file.size,
         mimeType: file.type || 'application/pdf',
         pageCount: Number(pageCount),
-        fileBlobUrl,
+        file,
         replaceExisting,
       });
 
@@ -359,7 +356,9 @@ export default function UploadPage({ params }: UploadPageProps) {
               <div className="flex sm:flex-col gap-3 rounded-xl bg-slate-50 border border-slate-100 p-3.5 shrink-0 text-xs">
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">Pricing</span>
-                  <span className="font-bold text-emerald-700">₹1.50/page + ₹40 calico</span>
+                  <span className="font-bold text-emerald-700">
+                    {formatCurrency(section.xerox_rate)}/page + {formatCurrency(section.extra_charge)} extra
+                  </span>
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">Deadline</span>
@@ -487,7 +486,7 @@ export default function UploadPage({ params }: UploadPageProps) {
                     className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-hidden"
                   />
                   <p className="mt-1 text-[11px] text-slate-400">
-                    Total: {formatCurrency(calculatePrintAmount(Number(pageCount) || 0))}
+                    Total: {formatCurrency(calculatePrintAmount(Number(pageCount) || 0, section.xerox_rate, section.extra_charge))}
                   </p>
                 </div>
               </div>
@@ -578,7 +577,7 @@ export default function UploadPage({ params }: UploadPageProps) {
                 ) : (
                   <>
                     <Upload className="h-4 w-4" />
-                    <span>Upload Report ({formatCurrency(calculatePrintAmount(Number(pageCount) || 0))})</span>
+                    <span>Upload Report ({formatCurrency(calculatePrintAmount(Number(pageCount) || 0, section.xerox_rate, section.extra_charge))})</span>
                   </>
                 )}
               </button>

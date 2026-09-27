@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { UploadSection } from '@/types';
 import { StatusBadge } from './StatusBadge';
-import { formatDateShort } from '@/lib/utils';
+import { formatCurrency, formatDateShort } from '@/lib/utils';
 import { Calendar, FileText, Upload, Users, ArrowRight, Lock } from 'lucide-react';
 
 interface UploadSectionCardProps {
@@ -37,7 +37,9 @@ export function UploadSectionCard({ section }: UploadSectionCardProps) {
             </span>
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Pricing</span>
-              <span className="font-bold text-slate-900 text-xs">₹1.50/page + ₹40</span>
+              <span className="font-bold text-slate-900 text-xs">
+                {formatCurrency(section.xerox_rate)}/page + {formatCurrency(section.extra_charge)}
+              </span>
             </div>
           </div>
 

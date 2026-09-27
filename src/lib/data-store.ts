@@ -19,7 +19,8 @@ const INITIAL_SECTIONS: UploadSection[] = [
     slug: 'java-project-report',
     description: 'Upload your completed Java project report including source code documentation and test screenshots.',
     deadline: '2026-09-30T23:59:59Z',
-    xerox_rate: 0,
+    xerox_rate: 1.5,
+    extra_charge: 40,
     allowed_file_types: ['pdf'],
     max_file_size: 10,
     status: 'open',
@@ -189,7 +190,6 @@ export const DataStore = {
   async createSection(input: CreateSectionInput): Promise<UploadSection> {
     const newSection: UploadSection = {
       ...input,
-      xerox_rate: 0,
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'sec-' + Date.now(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -314,7 +314,7 @@ export const DataStore = {
     fileSize: number;
     mimeType: string;
     pageCount: number;
-    fileBlobUrl?: string;
+    file: File;
     replaceExisting?: boolean;
   }): Promise<{ submission: Submission; replaced: boolean }> {
     const cleanRoll = params.roll_number.trim().toUpperCase();
@@ -329,7 +329,25 @@ export const DataStore = {
 
     const section = await this.getSectionById(params.upload_section_id);
     const sectionSlug = section?.slug || 'section';
-    const filePath = `${sectionSlug}/${cleanRoll}/${params.fileName}`;
+    const safeFileName = params.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `${sectionSlug}/${cleanRoll}/${Date.now()}-${safeFileName}`;
+    const amount = calculatePrintAmount(
+      params.pageCount,
+      Number(section?.xerox_rate ?? 1.5),
+      Number(section?.extra_charge ?? 40)
+    );
+
+    let fileUrl = URL.createObjectURL(params.file);
+    if (isSupabaseConfigured() && supabase) {
+      const { error: uploadError } = await supabase.storage
+        .from('submissions')
+        .upload(filePath, params.file, { contentType: params.mimeType, upsert: false });
+
+      if (uploadError) {
+        throw new Error(`File upload failed: ${uploadError.message}`);
+      }
+      fileUrl = '';
+    }
 
     if (existing && params.replaceExisting) {
       // Update existing record
@@ -339,11 +357,11 @@ export const DataStore = {
         department: cleanDept || existing.department,
         file_name: params.fileName,
         file_path: filePath,
-        file_url: params.fileBlobUrl || existing.file_url,
+        file_url: fileUrl,
         file_size: params.fileSize,
         mime_type: params.mimeType,
         page_count: params.pageCount,
-        amount: calculatePrintAmount(params.pageCount),
+        amount,
         uploaded_at: new Date().toISOString(),
         submission_status: 'Uploaded', // Reset verification on replacement as requested
         // Preserve payment/Xerox status unless altered by admin
@@ -352,11 +370,12 @@ export const DataStore = {
       };
 
       if (isSupabaseConfigured() && supabase) {
-        try {
-          await supabase.from('submissions').update(updated).eq('id', existing.id);
-        } catch (e) {
-          console.warn('Supabase replace update error', e);
-        }
+        const { error } = await supabase
+          .from('submissions')
+          .update(updated)
+          .eq('id', existing.id);
+        if (error) throw new Error(`Unable to replace submission: ${error.message}`);
+        return { submission: updated, replaced: true };
       }
 
       const all = getStoredSubmissions();
@@ -377,11 +396,11 @@ export const DataStore = {
       department: cleanDept,
       file_name: params.fileName,
       file_path: filePath,
-      file_url: params.fileBlobUrl || '/sample-document.pdf',
+      file_url: fileUrl,
       file_size: params.fileSize,
       mime_type: params.mimeType,
       page_count: params.pageCount,
-      amount: calculatePrintAmount(params.pageCount),
+      amount,
       submission_status: 'Uploaded',
       xerox_status: 'Pending',
       payment_status: 'Pending',
@@ -390,14 +409,9 @@ export const DataStore = {
     };
 
     if (isSupabaseConfigured() && supabase) {
-      try {
-        const { data, error } = await supabase.from('submissions').insert([newSub]).select().single();
-        if (!error && data) {
-          return { submission: data, replaced: false };
-        }
-      } catch (e) {
-        console.warn('Supabase create submission error', e);
-      }
+      const { error } = await supabase.from('submissions').insert([newSub]);
+      if (error) throw new Error(`Unable to save submission: ${error.message}`);
+      return { submission: newSub, replaced: false };
     }
 
     const all = getStoredSubmissions();

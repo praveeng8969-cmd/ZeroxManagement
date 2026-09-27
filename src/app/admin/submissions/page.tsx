@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Submission, UploadSection, FileStatus, XeroxStatus, PaymentStatus } from '@/types';
 import { DataStore } from '@/lib/data-store';
+import { downloadSubmissionFile } from '@/lib/zip-download';
 import { formatCurrency, formatDateShort, formatBytes } from '@/lib/utils';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Modal } from '@/components/Modal';
@@ -467,13 +468,11 @@ export default function AdminAllSubmissionsPage() {
             </div>
 
             <button
-              onClick={() => {
-                alert(`File ready for printer spool: ${previewSub.file_path}`);
-                setPreviewSub(null);
-              }}
-              className="w-full rounded-lg bg-sky-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-sky-700"
+              onClick={() => downloadSubmissionFile(previewSub).catch((error) => alert(error.message))}
+              className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-sky-700"
             >
-              Confirm / Close
+              <Download className="h-3.5 w-3.5" />
+              Download Document
             </button>
           </div>
         )}

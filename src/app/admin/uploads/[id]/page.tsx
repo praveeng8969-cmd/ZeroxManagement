@@ -8,7 +8,7 @@ import { formatCurrency, formatDate, formatDateShort, formatBytes } from '@/lib/
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatCard } from '@/components/StatCard';
 import { Modal } from '@/components/Modal';
-import { downloadSubmissionsAsZip } from '@/lib/zip-download';
+import { downloadSubmissionFile, downloadSubmissionsAsZip } from '@/lib/zip-download';
 import {
   ArrowLeft,
   Download,
@@ -254,7 +254,7 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
 
           {/* Download All (ZIP) */}
           <button
-            onClick={() => downloadSubmissionsAsZip(section.title, submissions)}
+            onClick={() => downloadSubmissionsAsZip(section.title, submissions).catch((error) => alert(error.message))}
             className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-sky-700"
           >
             <Download className="h-3.5 w-3.5" />
@@ -279,7 +279,9 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
           <div className="flex gap-4 rounded-xl bg-slate-50 border border-slate-100 p-3.5 text-xs shrink-0">
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Pricing</span>
-              <span className="font-bold text-emerald-700">₹1.50/page + ₹40 calico</span>
+              <span className="font-bold text-emerald-700">
+                {formatCurrency(section.xerox_rate)}/page + {formatCurrency(section.extra_charge)} extra
+              </span>
             </div>
             <div className="border-l border-slate-200 pl-4">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Deadline</span>
@@ -665,24 +667,13 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
             </div>
 
             <div className="flex gap-2 pt-2">
-              {previewSub.file_url ? (
-                <a
-                  href={previewSub.file_url}
-                  download={previewSub.file_name}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-sky-700"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  <span>Download Document</span>
-                </a>
-              ) : (
-                <button
-                  onClick={() => alert(`Document path: ${previewSub.file_path}`)}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-sky-700"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  <span>Download File</span>
-                </button>
-              )}
+              <button
+                onClick={() => downloadSubmissionFile(previewSub).catch((error) => alert(error.message))}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-sky-700"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>Download Document</span>
+              </button>
             </div>
           </div>
         )}

@@ -13,6 +13,7 @@ export interface UploadSection {
   description: string;
   deadline: string;
   xerox_rate: number;
+  extra_charge: number;
   allowed_file_types: string[]; // e.g. ['pdf', 'docx', 'pptx', 'images']
   max_file_size: number; // in MB
   status: UploadSectionStatus;
@@ -72,6 +73,8 @@ export interface CreateSectionInput {
   slug: string;
   description: string;
   deadline: string;
+  xerox_rate: number;
+  extra_charge: number;
   allowed_file_types: string[];
   max_file_size: number;
   status: UploadSectionStatus;

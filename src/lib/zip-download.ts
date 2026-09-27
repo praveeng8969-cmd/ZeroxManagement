@@ -1,5 +1,37 @@
 import JSZip from 'jszip';
 import { Submission } from '@/types';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase/client';
+
+async function getSubmissionBlob(submission: Submission): Promise<Blob> {
+  if (isSupabaseConfigured() && supabase && submission.file_path) {
+    const { data, error } = await supabase.storage
+      .from('submissions')
+      .download(submission.file_path);
+
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
+  if (submission.file_url) {
+    const response = await fetch(submission.file_url);
+    if (!response.ok) throw new Error('Unable to retrieve the uploaded file.');
+    return response.blob();
+  }
+
+  throw new Error('No stored file is available for this submission.');
+}
+
+export async function downloadSubmissionFile(submission: Submission) {
+  const blob = await getSubmissionBlob(submission);
+  const downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = submission.file_name;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(downloadUrl);
+}
 
 export async function downloadSubmissionsAsZip(sectionTitle: string, submissions: Submission[]) {
   if (!submissions || submissions.length === 0) {
@@ -8,6 +40,7 @@ export async function downloadSubmissionsAsZip(sectionTitle: string, submissions
   }
 
   const zip = new JSZip();
+  const failedFiles: string[] = [];
 
   // Prompt requires: "Rename downloaded files automatically. Format: ROLLNUMBER_NAME_FILENAME.
   // Example: 25CS174_PRAVEEN_G_Java_Project_Report.pdf"
@@ -18,18 +51,15 @@ export async function downloadSubmissionsAsZip(sectionTitle: string, submissions
     const zipEntryName = `${cleanRoll}_${cleanName}_${cleanFileName}`;
 
     try {
-      if (sub.file_url && sub.file_url.startsWith('blob:')) {
-        const res = await fetch(sub.file_url);
-        const blob = await res.blob();
-        zip.file(zipEntryName, blob);
-      } else {
-        // High quality fallback document text / PDF simulation if local placeholder
-        const placeholderContent = `%PDF-1.4\n% PrintTrack Document: ${sub.upload_section?.title || sectionTitle}\nStudent: ${sub.name}\nRoll: ${sub.roll_number}\nDepartment: ${sub.department || 'N/A'}\nSubmission ID: ${sub.id}\nUploaded: ${sub.uploaded_at}\n\n[Document Content Verified by Xerox Desk]`;
-        zip.file(zipEntryName, placeholderContent);
-      }
-    } catch (e) {
-      zip.file(zipEntryName, `PrintTrack Document: ${sub.name} (${sub.roll_number})`);
+      const blob = await getSubmissionBlob(sub);
+      zip.file(zipEntryName, blob);
+    } catch {
+      failedFiles.push(sub.file_name);
     }
+  }
+
+  if (failedFiles.length === submissions.length) {
+    throw new Error('None of the uploaded files could be downloaded from storage.');
   }
 
   const content = await zip.generateAsync({ type: 'blob' });
@@ -42,4 +72,8 @@ export async function downloadSubmissionsAsZip(sectionTitle: string, submissions
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(downloadUrl);
+
+  if (failedFiles.length > 0) {
+    alert(`${failedFiles.length} older file(s) were not found in storage and were skipped.`);
+  }
 }

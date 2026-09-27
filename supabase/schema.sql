@@ -12,7 +12,8 @@ create table if not exists public.upload_sections (
     slug text not null unique,
     description text,
     deadline timestamptz not null,
-    xerox_rate numeric(10, 2) not null default 0.00,
+    xerox_rate numeric(10, 2) not null default 1.50,
+    extra_charge numeric(10, 2) not null default 40.00,
     allowed_file_types text[] not null default array['pdf'],
     max_file_size integer not null default 10, -- in Megabytes
     status text not null default 'open' check (status in ('open', 'closed')),
@@ -24,6 +25,9 @@ create table if not exists public.upload_sections (
 -- Index for faster queries by slug and status
 create index if not exists idx_upload_sections_slug on public.upload_sections (slug);
 create index if not exists idx_upload_sections_status on public.upload_sections (status);
+
+-- Safe migration for projects created with an older schema.
+alter table public.upload_sections add column if not exists extra_charge numeric(10, 2) not null default 40.00;
 
 -- 2. SUBMISSIONS TABLE
 create table if not exists public.submissions (

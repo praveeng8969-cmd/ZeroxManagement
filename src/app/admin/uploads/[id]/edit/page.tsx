@@ -27,6 +27,8 @@ export default function EditUploadSectionPage({ params }: EditSectionPageProps) 
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState('');
+  const [pricePerPage, setPricePerPage] = useState('1.5');
+  const [extraCharge, setExtraCharge] = useState('40');
   const [allowedFileTypes, setAllowedFileTypes] = useState<string[]>(['pdf']);
   const [maxFileSize, setMaxFileSize] = useState('10');
   const [status, setStatus] = useState<UploadSectionStatus>('open');
@@ -48,6 +50,8 @@ export default function EditUploadSectionPage({ params }: EditSectionPageProps) 
           setDeadline(
             sec.deadline ? new Date(sec.deadline).toISOString().slice(0, 16) : ''
           );
+          setPricePerPage(String(sec.xerox_rate ?? 1.5));
+          setExtraCharge(String(sec.extra_charge ?? 40));
           setAllowedFileTypes(sec.allowed_file_types || ['pdf']);
           setMaxFileSize(String(sec.max_file_size || 10));
           setStatus(sec.status);
@@ -83,6 +87,8 @@ export default function EditUploadSectionPage({ params }: EditSectionPageProps) 
         slug: slug.trim(),
         description: description.trim(),
         deadline: new Date(deadline).toISOString(),
+        xerox_rate: parseFloat(pricePerPage) || 0,
+        extra_charge: parseFloat(extraCharge) || 0,
         allowed_file_types: allowedFileTypes,
         max_file_size: parseInt(maxFileSize) || 10,
         status,
@@ -171,6 +177,36 @@ export default function EditUploadSectionPage({ params }: EditSectionPageProps) 
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Price per Page (₹)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                value={pricePerPage}
+                onChange={(e) => setPricePerPage(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-bold text-slate-900 focus:border-sky-500 focus:outline-hidden"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Extra / Calico Charge (₹)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                value={extraCharge}
+                onChange={(e) => setExtraCharge(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-bold text-slate-900 focus:border-sky-500 focus:outline-hidden"
+              />
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Deadline

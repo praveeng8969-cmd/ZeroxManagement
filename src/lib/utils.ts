@@ -14,11 +14,12 @@ export function formatCurrency(amount: number | string | null | undefined): stri
   }).format(num);
 }
 
-export const PRICE_PER_PAGE = 1.5;
-export const CALICO_CHARGE = 40;
-
-export function calculatePrintAmount(pageCount: number): number {
-  return Math.max(0, pageCount) * PRICE_PER_PAGE + CALICO_CHARGE;
+export function calculatePrintAmount(
+  pageCount: number,
+  pricePerPage = 1.5,
+  extraCharge = 40
+): number {
+  return Math.max(0, pageCount) * Math.max(0, pricePerPage) + Math.max(0, extraCharge);
 }
 
 export function formatDate(dateString: string | null | undefined): string {
