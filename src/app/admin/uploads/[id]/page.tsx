@@ -8,6 +8,8 @@ import { formatCurrency, formatDate, formatDateShort, formatBytes } from '@/lib/
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatCard } from '@/components/StatCard';
 import { Modal } from '@/components/Modal';
+import { XeroxStatusSelector } from '@/components/XeroxStatusSelector';
+import { PaymentStatusSelector } from '@/components/PaymentStatusSelector';
 import { downloadSubmissionFile, downloadSubmissionsAsZip } from '@/lib/zip-download';
 import {
   ArrowLeft,
@@ -422,12 +424,13 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
           </div>
         )}
 
-        {/* Submissions Table */}
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              <tr>
-                <th className="py-3 px-3 w-8">
+        {/* Submissions Container */}
+        {filteredSubmissions.length > 0 ? (
+          <>
+            {/* MOBILE CARD VIEW */}
+            <div className="block md:hidden divide-y divide-slate-100 rounded-xl border border-slate-200 overflow-hidden">
+              <div className="flex items-center justify-between p-3 bg-slate-50/70 border-b border-slate-100">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-600">
                   <input
                     type="checkbox"
                     checked={
@@ -435,73 +438,126 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
                       selectedIds.length === filteredSubmissions.length
                     }
                     onChange={handleSelectAll}
-                    aria-label="Select all visible submissions"
-                    className="h-4 w-4 cursor-pointer rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    aria-label="Select all submissions"
+                    className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                   />
-                </th>
-                <th className="py-3 px-3">Roll No</th>
-                <th className="py-3 px-3">Student Name</th>
-                <th className="py-3 px-3">File Name</th>
-                <th className="py-3 px-3">Uploaded</th>
-                <th className="py-3 px-3">File Status</th>
-                <th className="py-3 px-3">Xerox Status</th>
-                <th className="py-3 px-3">Payment</th>
-                <th className="py-3 px-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredSubmissions.length > 0 ? (
-                filteredSubmissions.map((sub) => {
-                  const isSelected = selectedIds.includes(sub.id);
-                  return (
-                    <tr
-                      key={sub.id}
-                      className={`hover:bg-slate-50/80 transition-colors ${
-                        isSelected ? 'bg-sky-50/40' : ''
-                      }`}
-                    >
-                      <td className="py-3 px-3">
-                        <label className="flex h-8 w-8 cursor-pointer items-center justify-center">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleSelectOne(sub.id)}
-                            aria-label={`Select submission ${sub.roll_number}`}
-                            className="h-4 w-4 cursor-pointer rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                          />
-                        </label>
-                      </td>
+                  <span>Select All ({filteredSubmissions.length})</span>
+                </label>
+                <span className="text-[11px] text-slate-400">Tap status to change</span>
+              </div>
 
-                      <td className="py-3 px-3 font-mono font-bold text-slate-900">
-                        {sub.roll_number}
-                      </td>
+              {filteredSubmissions.map((sub) => {
+                const isSelected = selectedIds.includes(sub.id);
+                return (
+                  <div
+                    key={sub.id}
+                    className={`p-3.5 space-y-3 transition-colors ${
+                      isSelected ? 'bg-sky-50/40' : 'hover:bg-slate-50/40'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleSelectOne(sub.id)}
+                          aria-label={`Select ${sub.roll_number}`}
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 shrink-0"
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-sm text-slate-900">
+                              {sub.roll_number}
+                            </span>
+                            {sub.department && (
+                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                                {sub.department}
+                              </span>
+                            )}
+                          </div>
+                          <p className="font-semibold text-slate-800 text-xs mt-0.5">{sub.name}</p>
+                        </div>
+                      </div>
 
-                      <td className="py-3 px-3">
-                        <span className="font-semibold text-slate-800 block">{sub.name}</span>
-                        {sub.department && (
-                          <span className="text-[10px] text-slate-400 block">{sub.department}</span>
-                        )}
-                      </td>
-
-                      <td className="py-3 px-3">
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={() => setPreviewSub(sub)}
-                          className="font-medium text-sky-700 hover:underline max-w-[150px] truncate block text-left"
-                          title="Preview File"
+                          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                          title="View Info"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => downloadSubmissionFile(sub).catch((e) => alert(e.message))}
+                          className="rounded-lg p-2 text-sky-600 hover:bg-sky-50"
+                          title="Download"
+                        >
+                          <Download className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => setDeleteSubId(sub.id)}
+                          className="rounded-lg p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 text-xs flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <button
+                          onClick={() => setPreviewSub(sub)}
+                          className="font-medium text-sky-700 hover:underline truncate block text-left"
                         >
                           {sub.file_name}
                         </button>
-                        <span className="text-[10px] text-slate-400">
-                          {formatBytes(sub.file_size)} • {sub.page_count} pages • {formatCurrency(sub.amount)}
+                        <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-1">
+                          <span>{sub.page_count} pages</span>
+                          <span>•</span>
+                          <span>{formatBytes(sub.file_size)}</span>
+                          <span>•</span>
+                          <span>{formatDateShort(sub.uploaded_at)}</span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-bold text-slate-900 text-sm">
+                          {formatCurrency(sub.amount)}
                         </span>
-                      </td>
+                      </div>
+                    </div>
 
-                      <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
-                        {formatDateShort(sub.uploaded_at)}
-                      </td>
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                          Print Status:
+                        </span>
+                        <XeroxStatusSelector
+                          currentStatus={sub.xerox_status}
+                          submissionId={sub.id}
+                          onStatusChange={(newStatus) =>
+                            handleUpdateStatus(sub.id, { xerox_status: newStatus })
+                          }
+                        />
+                      </div>
 
-                      {/* File Verification Status with quick toggles */}
-                      <td className="py-3 px-3 whitespace-nowrap">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                          Payment:
+                        </span>
+                        <PaymentStatusSelector
+                          currentStatus={sub.payment_status}
+                          submissionId={sub.id}
+                          onStatusChange={(newStatus) =>
+                            handleUpdateStatus(sub.id, { payment_status: newStatus })
+                          }
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                          File Verification:
+                        </span>
                         <div className="flex items-center gap-1.5">
                           <StatusBadge status={sub.submission_status} size="sm" />
                           {sub.submission_status !== 'Verified' && (
@@ -509,111 +565,181 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
                               onClick={() =>
                                 handleUpdateStatus(sub.id, { submission_status: 'Verified' })
                               }
-                              className="rounded p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
-                              title="Verify File"
+                              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
                             >
-                              <Check className="h-3 w-3" />
-                            </button>
-                          )}
-                          {sub.submission_status !== 'Rejected' && (
-                            <button
-                              onClick={() =>
-                                handleUpdateStatus(sub.id, { submission_status: 'Rejected' })
-                              }
-                              className="rounded p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
-                              title="Reject File"
-                            >
-                              <X className="h-3 w-3" />
+                              Verify
                             </button>
                           )}
                         </div>
-                      </td>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
 
-                      {/* Xerox Status with quick transition buttons */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <StatusBadge status={sub.xerox_status} size="sm" />
-                          {sub.xerox_status === 'Pending' && (
-                            <button
-                              onClick={() =>
-                                handleUpdateStatus(sub.id, { xerox_status: 'Ready to Print' })
-                              }
-                              className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100"
-                            >
-                              Ready
-                            </button>
-                          )}
-                          {sub.xerox_status !== 'Printed' && sub.xerox_status !== 'Taken' && (
-                            <button
-                              onClick={() =>
-                                handleUpdateStatus(sub.id, { xerox_status: 'Printed' })
-                              }
-                              className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100"
-                            >
-                              Printed
-                            </button>
-                          )}
-                          {sub.xerox_status === 'Printed' && (
-                            <button
-                              onClick={() => handleUpdateStatus(sub.id, { xerox_status: 'Taken' })}
-                              className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                            >
-                              Taken
-                            </button>
-                          )}
-                        </div>
-                      </td>
+            {/* DESKTOP TABLE VIEW */}
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="py-3 px-3 w-8">
+                      <input
+                        type="checkbox"
+                        checked={
+                          filteredSubmissions.length > 0 &&
+                          selectedIds.length === filteredSubmissions.length
+                        }
+                        onChange={handleSelectAll}
+                        aria-label="Select all visible submissions"
+                        className="h-4 w-4 cursor-pointer rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                      />
+                    </th>
+                    <th className="py-3 px-3">Roll No</th>
+                    <th className="py-3 px-3">Student Name</th>
+                    <th className="py-3 px-3">File Name</th>
+                    <th className="py-3 px-3">Uploaded</th>
+                    <th className="py-3 px-3">File Status</th>
+                    <th className="py-3 px-3">Xerox Status</th>
+                    <th className="py-3 px-3">Payment</th>
+                    <th className="py-3 px-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredSubmissions.map((sub) => {
+                    const isSelected = selectedIds.includes(sub.id);
+                    return (
+                      <tr
+                        key={sub.id}
+                        className={`hover:bg-slate-50/80 transition-colors ${
+                          isSelected ? 'bg-sky-50/40' : ''
+                        }`}
+                      >
+                        <td className="py-3 px-3">
+                          <label className="flex h-8 w-8 cursor-pointer items-center justify-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleSelectOne(sub.id)}
+                              aria-label={`Select submission ${sub.roll_number}`}
+                              className="h-4 w-4 cursor-pointer rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                            />
+                          </label>
+                        </td>
 
-                      {/* Payment Status with quick toggles */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <button
-                          onClick={() =>
-                            handleUpdateStatus(sub.id, {
-                              payment_status: sub.payment_status === 'Paid' ? 'Pending' : 'Paid',
-                            })
-                          }
-                          className="cursor-pointer"
-                          title="Click to toggle payment"
-                        >
-                          <StatusBadge status={sub.payment_status} size="sm" />
-                        </button>
-                      </td>
+                        <td className="py-3 px-3 font-mono font-bold text-slate-900">
+                          {sub.roll_number}
+                        </td>
 
-                      {/* Actions */}
-                      <td className="py-3 px-3 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1">
-                          {/* Preview / View */}
+                        <td className="py-3 px-3">
+                          <span className="font-semibold text-slate-800 block">{sub.name}</span>
+                          {sub.department && (
+                            <span className="text-[10px] text-slate-400 block">{sub.department}</span>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-3">
                           <button
                             onClick={() => setPreviewSub(sub)}
-                            className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-sky-600"
-                            title="View Details"
+                            className="font-medium text-sky-700 hover:underline max-w-[150px] truncate block text-left cursor-pointer"
+                            title="Preview File"
                           >
-                            <Eye className="h-3.5 w-3.5" />
+                            {sub.file_name}
                           </button>
+                          <span className="text-[10px] text-slate-400">
+                            {formatBytes(sub.file_size)} • {sub.page_count} pages • {formatCurrency(sub.amount)}
+                          </span>
+                        </td>
 
-                          {/* Delete */}
-                          <button
-                            onClick={() => setDeleteSubId(sub.id)}
-                            className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                            title="Delete Submission"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={9} className="py-12 text-center text-xs text-slate-400">
-                    No submissions match the selected filter.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                        <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
+                          {formatDateShort(sub.uploaded_at)}
+                        </td>
+
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <StatusBadge status={sub.submission_status} size="sm" />
+                            {sub.submission_status !== 'Verified' && (
+                              <button
+                                onClick={() =>
+                                  handleUpdateStatus(sub.id, { submission_status: 'Verified' })
+                                }
+                                className="rounded p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 cursor-pointer"
+                                title="Verify File"
+                              >
+                                <Check className="h-3 w-3" />
+                              </button>
+                            )}
+                            {sub.submission_status !== 'Rejected' && (
+                              <button
+                                onClick={() =>
+                                  handleUpdateStatus(sub.id, { submission_status: 'Rejected' })
+                                }
+                                className="rounded p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                                title="Reject File"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <XeroxStatusSelector
+                            currentStatus={sub.xerox_status}
+                            submissionId={sub.id}
+                            onStatusChange={(newStatus) =>
+                              handleUpdateStatus(sub.id, { xerox_status: newStatus })
+                            }
+                          />
+                        </td>
+
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <PaymentStatusSelector
+                            currentStatus={sub.payment_status}
+                            submissionId={sub.id}
+                            onStatusChange={(newStatus) =>
+                              handleUpdateStatus(sub.id, { payment_status: newStatus })
+                            }
+                          />
+                        </td>
+
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => downloadSubmissionFile(sub).catch((e) => alert(e.message))}
+                              className="rounded p-1.5 text-slate-400 hover:bg-sky-50 hover:text-sky-600 cursor-pointer"
+                              title="Download File"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setPreviewSub(sub)}
+                              className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-sky-600 cursor-pointer"
+                              title="View Details"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteSubId(sub.id)}
+                              className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
+                              title="Delete Submission"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <div className="py-12 text-center text-xs text-slate-400 border border-slate-200 rounded-xl">
+            No submissions match the selected filter.
+          </div>
+        )}
       </div>
 
       {/* PREVIEW SUBMISSION MODAL */}
@@ -660,13 +786,27 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
                 <span className="text-slate-500">Amount Due:</span>
                 <span className="font-bold text-emerald-700">{formatCurrency(previewSub.amount)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Payment Status:</span>
-                <StatusBadge status={previewSub.payment_status} size="sm" />
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-semibold">Payment Status:</span>
+                <PaymentStatusSelector
+                  currentStatus={previewSub.payment_status}
+                  submissionId={previewSub.id}
+                  onStatusChange={async (newStatus) => {
+                    await handleUpdateStatus(previewSub.id, { payment_status: newStatus });
+                    setPreviewSub((prev) => (prev ? { ...prev, payment_status: newStatus } : null));
+                  }}
+                />
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Xerox Status:</span>
-                <StatusBadge status={previewSub.xerox_status} size="sm" />
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-semibold">Xerox Status:</span>
+                <XeroxStatusSelector
+                  currentStatus={previewSub.xerox_status}
+                  submissionId={previewSub.id}
+                  onStatusChange={async (newStatus) => {
+                    await handleUpdateStatus(previewSub.id, { xerox_status: newStatus });
+                    setPreviewSub((prev) => (prev ? { ...prev, xerox_status: newStatus } : null));
+                  }}
+                />
               </div>
             </div>
 

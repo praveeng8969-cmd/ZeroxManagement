@@ -42,7 +42,7 @@ export default function AdminLayout({
   return (
     <div className="mx-auto flex max-w-7xl flex-col md:flex-row min-h-[calc(100vh-4rem)]">
       <AdminSidebar />
-      <div className="flex-1 bg-slate-50/50 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+      <div className="flex-1 bg-slate-50/50 p-3 sm:p-6 lg:p-8 pb-24 md:pb-8 overflow-y-auto">
         {children}
       </div>
     </div>

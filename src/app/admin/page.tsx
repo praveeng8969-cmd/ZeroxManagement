@@ -4,9 +4,11 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { DashboardStats, UploadSection, Submission } from '@/types';
 import { DataStore } from '@/lib/data-store';
-import { formatCurrency, formatDateShort } from '@/lib/utils';
+import { formatCurrency } from '@/lib/utils';
 import { StatCard } from '@/components/StatCard';
 import { StatusBadge } from '@/components/StatusBadge';
+import { XeroxStatusSelector } from '@/components/XeroxStatusSelector';
+import { PaymentStatusSelector } from '@/components/PaymentStatusSelector';
 import {
   FolderPlus,
   FileCheck,
@@ -16,10 +18,8 @@ import {
   IndianRupee,
   Clock,
   ArrowRight,
-  TrendingUp,
   Plus,
   RefreshCw,
-  ExternalLink,
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -39,14 +39,33 @@ export default function AdminDashboardPage() {
 
   const loadData = async () => {
     try {
-      const [s, secList, subList] = await Promise.all([
-        DataStore.getDashboardStats(),
+      const [allSections, allSubmissions] = await Promise.all([
         DataStore.getSections(),
         DataStore.getSubmissions(),
       ]);
-      setStats(s);
-      setSections(secList.slice(0, 5));
-      setRecentSubmissions(subList.slice(0, 6));
+
+      setSections(allSections);
+      setRecentSubmissions(allSubmissions.slice(0, 10));
+
+      const readyToPrint = allSubmissions.filter((s) => s.xerox_status === 'Ready to Print').length;
+      const printed = allSubmissions.filter((s) => s.xerox_status === 'Printed').length;
+      const xeroxTaken = allSubmissions.filter((s) => s.xerox_status === 'Taken').length;
+      const expectedAmount = allSubmissions.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+      const receivedAmount = allSubmissions
+        .filter((s) => s.payment_status === 'Paid')
+        .reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+      const pendingAmount = expectedAmount - receivedAmount;
+
+      setStats({
+        total_sections: allSections.length,
+        total_submissions: allSubmissions.length,
+        ready_to_print: readyToPrint,
+        printed,
+        xerox_taken: xeroxTaken,
+        expected_amount: expectedAmount,
+        received_amount: receivedAmount,
+        pending_amount: pendingAmount,
+      });
     } catch (err) {
       console.error('Failed to load dashboard data', err);
     } finally {
@@ -68,6 +87,9 @@ export default function AdminDashboardPage() {
     subId: string,
     updates: { xerox_status?: any; payment_status?: any; submission_status?: any }
   ) => {
+    setRecentSubmissions((prev) =>
+      prev.map((s) => (s.id === subId ? { ...s, ...updates } : s))
+    );
     await DataStore.updateSubmissionStatus(subId, updates);
     loadData();
   };
@@ -81,20 +103,22 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Printing & Xerox Dashboard</h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+            Printing & Xerox Desk
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
             Real-time overview of document uploads, printing workflow, and payment collections.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <button
             onClick={loadData}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             <span>Refresh</span>
@@ -102,17 +126,16 @@ export default function AdminDashboardPage() {
 
           <Link
             href="/admin/uploads/new"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3.5 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-sky-700 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-3.5 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-sky-700 active:scale-95 transition-all"
           >
             <Plus className="h-4 w-4" />
-            <span>Create Upload Section</span>
+            <span>New Section</span>
           </Link>
         </div>
       </div>
 
-      {/* Primary KPI Grid (8 metrics specified in prompt) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        {/* Total Upload Sections */}
+      {/* Primary KPI Grid (8 metrics) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
         <StatCard
           label="Upload Sections"
           value={stats.total_sections}
@@ -121,7 +144,6 @@ export default function AdminDashboardPage() {
           variant="primary"
         />
 
-        {/* Total Submissions */}
         <StatCard
           label="Total Submissions"
           value={stats.total_submissions}
@@ -130,7 +152,6 @@ export default function AdminDashboardPage() {
           variant="info"
         />
 
-        {/* Ready to Print */}
         <StatCard
           label="Ready to Print"
           value={stats.ready_to_print}
@@ -139,7 +160,6 @@ export default function AdminDashboardPage() {
           variant="warning"
         />
 
-        {/* Printed */}
         <StatCard
           label="Printed"
           value={stats.printed}
@@ -148,7 +168,6 @@ export default function AdminDashboardPage() {
           variant="primary"
         />
 
-        {/* Xerox Taken */}
         <StatCard
           label="Xerox Taken"
           value={stats.xerox_taken}
@@ -157,7 +176,6 @@ export default function AdminDashboardPage() {
           variant="success"
         />
 
-        {/* Expected Amount */}
         <StatCard
           label="Total Expected"
           value={formatCurrency(stats.expected_amount)}
@@ -166,7 +184,6 @@ export default function AdminDashboardPage() {
           variant="default"
         />
 
-        {/* Received Amount */}
         <StatCard
           label="Total Received"
           value={formatCurrency(stats.received_amount)}
@@ -175,7 +192,6 @@ export default function AdminDashboardPage() {
           variant="success"
         />
 
-        {/* Pending Amount */}
         <StatCard
           label="Pending Amount"
           value={formatCurrency(stats.pending_amount)}
@@ -188,7 +204,7 @@ export default function AdminDashboardPage() {
       {/* Sections and Recent Activity Split View */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Upload Sections Overview */}
-        <div className="lg:col-span-1 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs">
+        <div className="lg:col-span-1 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-2xs">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
             <h3 className="text-sm font-bold text-slate-900">Upload Sections</h3>
             <Link
@@ -200,21 +216,21 @@ export default function AdminDashboardPage() {
             </Link>
           </div>
 
-          <div className="space-y-3">
-            {sections.map((sec) => (
+          <div className="space-y-2.5">
+            {sections.slice(0, 5).map((sec) => (
               <div
                 key={sec.id}
                 className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 hover:bg-slate-50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div>
+                  <div className="min-w-0">
                     <Link
                       href={`/admin/uploads/${sec.id}`}
-                      className="text-xs font-bold text-slate-900 hover:text-sky-600 line-clamp-1"
+                      className="text-xs font-bold text-slate-900 hover:text-sky-600 truncate block"
                     >
                       {sec.title}
                     </Link>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
+                    <p className="text-[11px] text-slate-500 mt-0.5 truncate">
                       {formatCurrency(sec.xerox_rate)}/page + {formatCurrency(sec.extra_charge)} extra • {sec.submissions_count ?? 0} files
                     </p>
                   </div>
@@ -226,7 +242,7 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* Recent Submissions Queue */}
-        <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs">
+        <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-2xs">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
             <div>
               <h3 className="text-sm font-bold text-slate-900">Recent Submissions</h3>
@@ -242,79 +258,86 @@ export default function AdminDashboardPage() {
           </div>
 
           {recentSubmissions.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  <tr>
-                    <th className="pb-2">Roll No</th>
-                    <th className="pb-2">Student</th>
-                    <th className="pb-2">Xerox Status</th>
-                    <th className="pb-2">Payment</th>
-                    <th className="pb-2 text-right">Quick Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {recentSubmissions.map((sub) => (
-                    <tr key={sub.id} className="hover:bg-slate-50/50">
-                      <td className="py-2.5 font-mono font-bold text-slate-900">{sub.roll_number}</td>
-                      <td className="py-2.5">
-                        <span className="font-medium text-slate-800 block truncate max-w-[130px]">
-                          {sub.name}
-                        </span>
-                        <span className="text-[10px] text-slate-400 block truncate max-w-[130px]">
-                          {sub.file_name}
-                        </span>
-                      </td>
-                      <td className="py-2.5">
-                        <StatusBadge status={sub.xerox_status} size="sm" />
-                      </td>
-                      <td className="py-2.5">
-                        <StatusBadge status={sub.payment_status} size="sm" />
-                      </td>
-                      <td className="py-2.5 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {sub.xerox_status !== 'Printed' && sub.xerox_status !== 'Taken' && (
-                            <button
-                              onClick={() => handleQuickStatus(sub.id, { xerox_status: 'Printed' })}
-                              className="rounded px-2 py-0.5 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
-                              title="Mark Printed"
-                            >
-                              Print
-                            </button>
-                          )}
-                          {sub.xerox_status === 'Printed' && (
-                            <button
-                              onClick={() => handleQuickStatus(sub.id, { xerox_status: 'Taken' })}
-                              className="rounded px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-                              title="Mark Xerox Taken"
-                            >
-                              Taken
-                            </button>
-                          )}
-                          {sub.payment_status === 'Pending' ? (
-                            <button
-                              onClick={() => handleQuickStatus(sub.id, { payment_status: 'Paid' })}
-                              className="rounded px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-                              title="Mark Paid"
-                            >
-                              Paid
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleQuickStatus(sub.id, { payment_status: 'Pending' })}
-                              className="rounded px-2 py-0.5 text-[10px] font-medium bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100"
-                              title="Mark Unpaid"
-                            >
-                              Unpaid
-                            </button>
-                          )}
-                        </div>
-                      </td>
+            <>
+              {/* Mobile Card List for Recent Submissions */}
+              <div className="block sm:hidden divide-y divide-slate-100">
+                {recentSubmissions.map((sub) => (
+                  <div key={sub.id} className="py-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-sm text-slate-900">{sub.roll_number}</span>
+                        <span className="text-xs font-semibold text-slate-800 truncate max-w-[130px]">{sub.name}</span>
+                      </div>
+                      <span className="text-xs font-bold text-slate-900">{formatCurrency(sub.amount)}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 truncate">{sub.file_name}</div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <XeroxStatusSelector
+                        currentStatus={sub.xerox_status}
+                        submissionId={sub.id}
+                        onStatusChange={(newStatus) =>
+                          handleQuickStatus(sub.id, { xerox_status: newStatus })
+                        }
+                      />
+                      <PaymentStatusSelector
+                        currentStatus={sub.payment_status}
+                        submissionId={sub.id}
+                        onStatusChange={(newStatus) =>
+                          handleQuickStatus(sub.id, { payment_status: newStatus })
+                        }
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <tr>
+                      <th className="pb-2">Roll No</th>
+                      <th className="pb-2">Student</th>
+                      <th className="pb-2">Xerox Print Status</th>
+                      <th className="pb-2 text-right">Payment</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {recentSubmissions.map((sub) => (
+                      <tr key={sub.id} className="hover:bg-slate-50/50">
+                        <td className="py-3 font-mono font-bold text-slate-900">{sub.roll_number}</td>
+                        <td className="py-3">
+                          <span className="font-semibold text-slate-800 block truncate max-w-[140px]">
+                            {sub.name}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block truncate max-w-[140px]">
+                            {sub.file_name} • {formatCurrency(sub.amount)}
+                          </span>
+                        </td>
+                        <td className="py-3 whitespace-nowrap">
+                          <XeroxStatusSelector
+                            currentStatus={sub.xerox_status}
+                            submissionId={sub.id}
+                            onStatusChange={(newStatus) =>
+                              handleQuickStatus(sub.id, { xerox_status: newStatus })
+                            }
+                          />
+                        </td>
+                        <td className="py-3 text-right whitespace-nowrap">
+                          <PaymentStatusSelector
+                            currentStatus={sub.payment_status}
+                            submissionId={sub.id}
+                            onStatusChange={(newStatus) =>
+                              handleQuickStatus(sub.id, { payment_status: newStatus })
+                            }
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           ) : (
             <p className="py-8 text-center text-xs text-slate-400">No submissions uploaded yet.</p>
           )}

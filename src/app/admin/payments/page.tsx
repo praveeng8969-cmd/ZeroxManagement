@@ -4,19 +4,19 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { SectionFinancialSummary, Submission, UploadSection } from '@/types';
 import { DataStore } from '@/lib/data-store';
-import { formatCurrency, formatDateShort } from '@/lib/utils';
+import { formatCurrency } from '@/lib/utils';
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatCard } from '@/components/StatCard';
+import { PaymentStatusSelector } from '@/components/PaymentStatusSelector';
+import { XeroxStatusSelector } from '@/components/XeroxStatusSelector';
 import {
   CreditCard,
   IndianRupee,
   CheckCircle2,
   Clock,
   Search,
-  Filter,
   RefreshCw,
   Folder,
-  ArrowUpRight,
 } from 'lucide-react';
 
 export default function AdminPaymentsPage() {
@@ -53,9 +53,14 @@ export default function AdminPaymentsPage() {
     return () => window.removeEventListener('printtrack_submissions_updated', loadData);
   }, []);
 
-  const handleTogglePayment = async (sub: Submission) => {
-    const nextStatus = sub.payment_status === 'Paid' ? 'Pending' : 'Paid';
-    await DataStore.updateSubmissionStatus(sub.id, { payment_status: nextStatus });
+  const handleUpdateStatus = async (
+    subId: string,
+    updates: { payment_status?: any; xerox_status?: any }
+  ) => {
+    setSubmissions((prev) =>
+      prev.map((s) => (s.id === subId ? { ...s, ...updates } : s))
+    );
+    await DataStore.updateSubmissionStatus(subId, updates);
     loadData();
   };
 
@@ -81,58 +86,58 @@ export default function AdminPaymentsPage() {
   });
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Payment & Xerox Collections
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+            Payment & Collections
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-500 mt-0.5">
             Automated financial reconciliation of student printing rates and counter collections.
           </p>
         </div>
 
         <button
           onClick={loadData}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
+          className="self-start sm:self-auto inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
         >
           <RefreshCw className="h-3.5 w-3.5" />
-          <span>Recalculate Totals</span>
+          <span>Refresh</span>
         </button>
       </div>
 
       {/* Financial Top KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <StatCard
-          label="Total Amount Expected"
+          label="Total Expected"
           value={formatCurrency(totalExpected)}
-          subValue="Total expected from all uploaded files"
+          subValue="All uploaded documents"
           icon={IndianRupee}
           variant="default"
         />
         <StatCard
-          label="Total Amount Received"
+          label="Total Received"
           value={formatCurrency(totalReceived)}
-          subValue="Confirmed collections at counter"
+          subValue="Collected via online / cash"
           icon={CheckCircle2}
           variant="success"
         />
         <StatCard
-          label="Outstanding Pending Amount"
+          label="Outstanding Pending"
           value={formatCurrency(totalPending)}
-          subValue="Due upon Xerox collection"
+          subValue="To collect upon Xerox pickup"
           icon={Clock}
           variant="warning"
         />
       </div>
 
-      {/* Section-wise Financial Breakdown Table */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs space-y-4">
+      {/* Section-wise Financial Breakdown */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-2xs space-y-4">
         <div>
           <h3 className="text-sm font-bold text-slate-900">Section-wise Payment Summary</h3>
           <p className="text-xs text-slate-500">
-            Automatically calculates expected revenue based on individual section Xerox rates.
+            Revenue breakdown across courses and sections.
           </p>
         </div>
 
@@ -140,19 +145,19 @@ export default function AdminPaymentsPage() {
           <table className="w-full text-left text-xs">
             <thead className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               <tr>
-                <th className="py-3 px-4">Upload Section</th>
-                <th className="py-3 px-4">Submissions</th>
-                <th className="py-3 px-4">Paid Users</th>
-                <th className="py-3 px-4">Unpaid Users</th>
-                <th className="py-3 px-4">Expected</th>
-                <th className="py-3 px-4">Received</th>
-                <th className="py-3 px-4 text-right">Pending Amount</th>
+                <th className="py-3 px-3 sm:px-4">Upload Section</th>
+                <th className="py-3 px-3 sm:px-4">Files</th>
+                <th className="py-3 px-3 sm:px-4">Paid</th>
+                <th className="py-3 px-3 sm:px-4">Unpaid</th>
+                <th className="py-3 px-3 sm:px-4">Expected</th>
+                <th className="py-3 px-3 sm:px-4">Received</th>
+                <th className="py-3 px-3 sm:px-4 text-right">Pending</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {summaries.map((sec) => (
                 <tr key={sec.section_id} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="py-3 px-4">
+                  <td className="py-3 px-3 sm:px-4">
                     <Link
                       href={`/admin/uploads/${sec.section_id}`}
                       className="font-bold text-slate-900 hover:text-sky-600 block"
@@ -161,22 +166,22 @@ export default function AdminPaymentsPage() {
                     </Link>
                     <span className="text-[10px] text-slate-400">/{sec.slug}</span>
                   </td>
-                  <td className="py-3 px-4 font-medium text-slate-700">
+                  <td className="py-3 px-3 sm:px-4 font-medium text-slate-700">
                     {sec.submissions_count}
                   </td>
-                  <td className="py-3 px-4 text-emerald-700 font-semibold">
+                  <td className="py-3 px-3 sm:px-4 text-emerald-700 font-semibold">
                     {sec.paid_count}
                   </td>
-                  <td className="py-3 px-4 text-amber-700 font-semibold">
+                  <td className="py-3 px-3 sm:px-4 text-amber-700 font-semibold">
                     {sec.pending_count}
                   </td>
-                  <td className="py-3 px-4 font-bold text-slate-800">
+                  <td className="py-3 px-3 sm:px-4 font-bold text-slate-800">
                     {formatCurrency(sec.expected_amount)}
                   </td>
-                  <td className="py-3 px-4 font-bold text-emerald-700">
+                  <td className="py-3 px-3 sm:px-4 font-bold text-emerald-700">
                     {formatCurrency(sec.received_amount)}
                   </td>
-                  <td className="py-3 px-4 text-right font-bold text-amber-700">
+                  <td className="py-3 px-3 sm:px-4 text-right font-bold text-amber-700">
                     {formatCurrency(sec.pending_amount)}
                   </td>
                 </tr>
@@ -187,12 +192,12 @@ export default function AdminPaymentsPage() {
       </div>
 
       {/* Student Payment Management Roster */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs space-y-4">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900">Student Payment Records</h3>
             <p className="text-xs text-slate-500">
-              Click &quot;Mark Paid&quot; or &quot;Mark Unpaid&quot; to toggle payment status instantly.
+              Easily toggle payment and print statuses per student.
             </p>
           </div>
 
@@ -204,14 +209,14 @@ export default function AdminPaymentsPage() {
                 placeholder="Search student or roll number..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full sm:w-64 rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-hidden"
+                className="w-full sm:w-64 rounded-xl border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-hidden"
               />
             </div>
 
             <select
               value={sectionFilter}
               onChange={(e) => setSectionFilter(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-hidden"
+              className="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-hidden"
             >
               <option value="ALL">All Sections</option>
               {sections.map((s) => (
@@ -221,10 +226,10 @@ export default function AdminPaymentsPage() {
               ))}
             </select>
 
-            <div className="flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
+            <div className="flex rounded-xl border border-slate-200 bg-white p-0.5 text-xs">
               <button
                 onClick={() => setPayFilter('ALL')}
-                className={`rounded px-2.5 py-1 ${
+                className={`rounded-lg px-2.5 py-1 transition-colors ${
                   payFilter === 'ALL'
                     ? 'bg-sky-600 text-white font-semibold'
                     : 'text-slate-600 hover:text-slate-900'
@@ -234,7 +239,7 @@ export default function AdminPaymentsPage() {
               </button>
               <button
                 onClick={() => setPayFilter('PAID')}
-                className={`rounded px-2.5 py-1 ${
+                className={`rounded-lg px-2.5 py-1 transition-colors ${
                   payFilter === 'PAID'
                     ? 'bg-sky-600 text-white font-semibold'
                     : 'text-slate-600 hover:text-slate-900'
@@ -244,7 +249,7 @@ export default function AdminPaymentsPage() {
               </button>
               <button
                 onClick={() => setPayFilter('PENDING')}
-                className={`rounded px-2.5 py-1 ${
+                className={`rounded-lg px-2.5 py-1 transition-colors ${
                   payFilter === 'PENDING'
                     ? 'bg-sky-600 text-white font-semibold'
                     : 'text-slate-600 hover:text-slate-900'
@@ -256,8 +261,74 @@ export default function AdminPaymentsPage() {
           </div>
         </div>
 
-        {/* Student Payment Table */}
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        {/* Mobile View for Payments */}
+        <div className="block md:hidden divide-y divide-slate-100 rounded-xl border border-slate-200 overflow-hidden">
+          {filteredSubmissions.length > 0 ? (
+            filteredSubmissions.map((sub) => {
+              const sec = sections.find((s) => s.id === sub.upload_section_id);
+              const amount = Number(sub.amount) || 0;
+
+              return (
+                <div key={sub.id} className="p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-sm text-slate-900">{sub.roll_number}</span>
+                        {sub.department && (
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600 font-medium">
+                            {sub.department}
+                          </span>
+                        )}
+                      </div>
+                      <p className="font-semibold text-slate-800 text-xs mt-0.5">{sub.name}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-bold text-slate-900 text-sm">{formatCurrency(amount)}</span>
+                      <span className="block text-[10px] text-slate-400">{sub.page_count} pages</span>
+                    </div>
+                  </div>
+
+                  {sec && (
+                    <div className="text-[11px] text-slate-500 truncate flex items-center gap-1">
+                      <Folder className="h-3 w-3 text-slate-400" />
+                      <span>{sec.title}</span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-slate-400">Payment:</span>
+                      <PaymentStatusSelector
+                        currentStatus={sub.payment_status}
+                        submissionId={sub.id}
+                        onStatusChange={(newStatus) =>
+                          handleUpdateStatus(sub.id, { payment_status: newStatus })
+                        }
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-slate-400">Print:</span>
+                      <XeroxStatusSelector
+                        currentStatus={sub.xerox_status}
+                        submissionId={sub.id}
+                        onStatusChange={(newStatus) =>
+                          handleUpdateStatus(sub.id, { xerox_status: newStatus })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="py-12 text-center text-xs text-slate-400">
+              No payment records match the current filter.
+            </div>
+          )}
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-left text-xs">
             <thead className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               <tr>
@@ -267,7 +338,6 @@ export default function AdminPaymentsPage() {
                 <th className="py-3 px-4">Amount Due</th>
                 <th className="py-3 px-4">Payment Status</th>
                 <th className="py-3 px-4">Xerox Status</th>
-                <th className="py-3 px-4 text-right">Quick Toggle</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -275,7 +345,6 @@ export default function AdminPaymentsPage() {
                 filteredSubmissions.map((sub) => {
                   const sec = sections.find((s) => s.id === sub.upload_section_id);
                   const amount = Number(sub.amount) || 0;
-                  const isPaid = sub.payment_status === 'Paid';
 
                   return (
                     <tr key={sub.id} className="hover:bg-slate-50/60 transition-colors">
@@ -300,36 +369,30 @@ export default function AdminPaymentsPage() {
                       </td>
 
                       <td className="py-3 px-4">
-                        <StatusBadge status={sub.payment_status} size="sm" />
+                        <PaymentStatusSelector
+                          currentStatus={sub.payment_status}
+                          submissionId={sub.id}
+                          onStatusChange={(newStatus) =>
+                            handleUpdateStatus(sub.id, { payment_status: newStatus })
+                          }
+                        />
                       </td>
 
                       <td className="py-3 px-4">
-                        <StatusBadge status={sub.xerox_status} size="sm" />
-                      </td>
-
-                      <td className="py-3 px-4 text-right">
-                        {isPaid ? (
-                          <button
-                            onClick={() => handleTogglePayment(sub)}
-                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                          >
-                            Mark Unpaid
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleTogglePayment(sub)}
-                            className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 shadow-2xs"
-                          >
-                            Mark Paid ({formatCurrency(amount)})
-                          </button>
-                        )}
+                        <XeroxStatusSelector
+                          currentStatus={sub.xerox_status}
+                          submissionId={sub.id}
+                          onStatusChange={(newStatus) =>
+                            handleUpdateStatus(sub.id, { xerox_status: newStatus })
+                          }
+                        />
                       </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-xs text-slate-400">
+                  <td colSpan={6} className="py-12 text-center text-xs text-slate-400">
                     No payment records match the current filter.
                   </td>
                 </tr>

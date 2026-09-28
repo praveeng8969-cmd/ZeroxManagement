@@ -47,6 +47,13 @@ function notifySectionsUpdated() {
   localStorage.setItem(SECTIONS_UPDATED_KEY, new Date().toISOString());
 }
 
+function notifySubmissionsUpdated() {
+  if (typeof window === 'undefined') return;
+
+  window.dispatchEvent(new Event('printtrack_submissions_updated'));
+  localStorage.setItem('printtrack_submissions_updated_at', new Date().toISOString());
+}
+
 function getStoredSections(): UploadSection[] {
   if (typeof window === 'undefined') {
     return memorySections;
@@ -479,6 +486,33 @@ export const DataStore = {
       payment_status?: PaymentStatus;
     }
   ): Promise<Submission | null> {
+    try {
+      const res = await fetch('/api/submissions/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, updates }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        const all = getStoredSubmissions();
+        const idx = all.findIndex((s) => s.id === id);
+        if (idx !== -1) {
+          all[idx] = {
+            ...all[idx],
+            ...updates,
+            updated_at: new Date().toISOString(),
+          };
+          saveStoredSubmissions(all);
+        }
+        notifySubmissionsUpdated();
+        if (result.data) {
+          return result.data as Submission;
+        }
+      }
+    } catch (apiErr) {
+      console.warn('API status update fallback:', apiErr);
+    }
+
     if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
@@ -488,7 +522,10 @@ export const DataStore = {
           .select()
           .single();
 
-        if (!error && data) return data;
+        if (!error && data) {
+          notifySubmissionsUpdated();
+          return data;
+        }
       } catch (e) {
         console.warn('Supabase updateSubmissionStatus error', e);
       }
@@ -504,6 +541,7 @@ export const DataStore = {
       updated_at: new Date().toISOString(),
     };
     saveStoredSubmissions(all);
+    notifySubmissionsUpdated();
     return all[idx];
   },
 
@@ -515,6 +553,32 @@ export const DataStore = {
       payment_status?: PaymentStatus;
     }
   ): Promise<boolean> {
+    try {
+      const res = await fetch('/api/submissions/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, updates }),
+      });
+      if (res.ok) {
+        const all = getStoredSubmissions();
+        const updated = all.map((sub) => {
+          if (ids.includes(sub.id)) {
+            return {
+              ...sub,
+              ...updates,
+              updated_at: new Date().toISOString(),
+            };
+          }
+          return sub;
+        });
+        saveStoredSubmissions(updated);
+        notifySubmissionsUpdated();
+        return true;
+      }
+    } catch (apiErr) {
+      console.warn('API bulk status update fallback:', apiErr);
+    }
+
     if (isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase
@@ -522,7 +586,10 @@ export const DataStore = {
           .update({ ...updates, updated_at: new Date().toISOString() })
           .in('id', ids);
 
-        if (!error) return true;
+        if (!error) {
+          notifySubmissionsUpdated();
+          return true;
+        }
       } catch (e) {
         console.warn('Supabase bulk update error', e);
       }
@@ -541,6 +608,7 @@ export const DataStore = {
     });
 
     saveStoredSubmissions(updated);
+    notifySubmissionsUpdated();
     return true;
   },
 
