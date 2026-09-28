@@ -10,7 +10,7 @@ export function formatCurrency(amount: number | string | null | undefined): stri
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    minimumFractionDigits: 0,
+    minimumFractionDigits: num % 1 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   }).format(num);
 }
@@ -21,7 +21,7 @@ export function calculatePrintAmount(
   extraCharge = 40
 ): number {
   const amount = Math.max(0, pageCount) * Math.max(0, pricePerPage) + Math.max(0, extraCharge);
-  return Math.ceil(amount / 5) * 5;
+  return Math.round(amount * 100) / 100;
 }
 
 export function formatDate(dateString: string | null | undefined): string {
