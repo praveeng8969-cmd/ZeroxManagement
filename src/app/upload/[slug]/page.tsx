@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Calendar,
   IndianRupee,
+  CreditCard,
   ArrowLeft,
   X,
   Lock,
@@ -53,6 +54,7 @@ export default function UploadPage({ params }: UploadPageProps) {
   const [successSubmission, setSuccessSubmission] = useState<Submission | null>(null);
   const [isPaying, setIsPaying] = useState(false);
   const [paymentError, setPaymentError] = useState('');
+  const [paymentDetails, setPaymentDetails] = useState<{ paymentId: string; orderId: string } | null>(null);
 
   const loadRazorpay = () =>
     new Promise<boolean>((resolve) => {
@@ -77,9 +79,50 @@ export default function UploadPage({ params }: UploadPageProps) {
       document.body.appendChild(script);
     });
 
-  const startPayment = async (submission: Submission) => {
-    setIsPaying(true);
+  const handlePaymentAndSubmit = async (replaceExisting = false) => {
+    if (!section) return;
+    if (!name.trim()) {
+      setErrorMessage('Please enter your full name.');
+      return;
+    }
+    if (!rollNumber.trim()) {
+      setErrorMessage('Please enter your Roll Number / Register Number.');
+      return;
+    }
+    if (!file) {
+      setErrorMessage('Please select or drop a PDF file to upload.');
+      return;
+    }
+    if (!Number.isInteger(Number(pageCount)) || Number(pageCount) < 1) {
+      setErrorMessage('Please enter a valid number of pages.');
+      return;
+    }
+
+    setErrorMessage('');
     setPaymentError('');
+
+    // 1. Check duplicate submission first before initiating payment
+    if (!replaceExisting) {
+      try {
+        const found = await DataStore.getSubmissionByRollNumber(section.id, rollNumber);
+        if (found) {
+          setExistingSubmission(found);
+          setShowDuplicateModal(true);
+          return;
+        }
+      } catch (err) {
+        console.warn('Duplicate check warning:', err);
+      }
+    }
+
+    const totalAmount = calculatePrintAmount(
+      Number(pageCount),
+      section.xerox_rate,
+      section.extra_charge
+    );
+    const amountInPaise = Math.max(100, Math.round(totalAmount * 100));
+
+    setIsPaying(true);
 
     try {
       const loaded = await loadRazorpay();
@@ -90,8 +133,20 @@ export default function UploadPage({ params }: UploadPageProps) {
       const orderResponse = await fetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submissionId: submission.id }),
+        body: JSON.stringify({
+          amount: amountInPaise,
+          currency: 'INR',
+          receipt: `rcpt_${Date.now()}_${rollNumber.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)}`,
+          notes: {
+            roll_number: rollNumber,
+            name,
+            department: department || '',
+            section_id: section.id,
+            section_title: section.title,
+          },
+        }),
       });
+
       const order = await orderResponse.json();
       if (!orderResponse.ok) throw new Error(order.error || 'Unable to start payment.');
 
@@ -100,19 +155,27 @@ export default function UploadPage({ params }: UploadPageProps) {
         amount: order.amount,
         currency: order.currency || 'INR',
         name: 'Xerox Desk',
-        description: `${section?.title || 'Document printing'} - ${submission.roll_number}`,
+        description: `${section?.title || 'Document printing'} - ${rollNumber}`,
         order_id: order.order_id || order.orderId,
-        prefill: { name: submission.name },
-        notes: { submission_id: submission.id },
+        prefill: { name },
+        notes: {
+          roll_number: rollNumber,
+          section_id: section.id,
+        },
         theme: { color: '#0284c7' },
         modal: {
           ondismiss: () => {
             setIsPaying(false);
-            setPaymentError('Payment was cancelled by user.');
+            setErrorMessage('Payment was cancelled. Your document has NOT been submitted and no invoice was generated.');
           },
         },
         handler: async (response: RazorpaySuccessResponse) => {
           try {
+            setIsPaying(false);
+            setIsUploading(true);
+            setUploadProgress(20);
+
+            // Verify payment signature on backend
             const verifyResponse = await fetch('/api/verify-payment', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -120,30 +183,67 @@ export default function UploadPage({ params }: UploadPageProps) {
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
-                submission_id: submission.id,
               }),
             });
-            const result = await verifyResponse.json();
-            if (!verifyResponse.ok || !result.success) throw new Error(result.error || 'Unable to verify payment.');
 
-            setSuccessSubmission((current) =>
-              current ? { ...current, payment_status: 'Paid' } : current
-            );
+            const verifyResult = await verifyResponse.json();
+            if (!verifyResponse.ok || !verifyResult.success) {
+              throw new Error(verifyResult.error || 'Payment signature verification failed.');
+            }
+
+            // ONLY AFTER PAYMENT IS COMPLETED & VERIFIED: upload file and create submission record!
+            const progressTimer = setInterval(() => {
+              setUploadProgress((prev) => {
+                if (prev >= 90) {
+                  clearInterval(progressTimer);
+                  return 90;
+                }
+                return prev + 25;
+              });
+            }, 120);
+
+            const res = await DataStore.createOrReplaceSubmission({
+              upload_section_id: section.id,
+              name,
+              roll_number: rollNumber,
+              department,
+              fileName: file.name,
+              fileSize: file.size,
+              mimeType: file.type || 'application/pdf',
+              pageCount: Number(pageCount),
+              file,
+              replaceExisting,
+              payment_status: 'Paid',
+              payment_method: `Razorpay (${response.razorpay_payment_id})`,
+            });
+
+            clearInterval(progressTimer);
+            setUploadProgress(100);
+
+            setTimeout(() => {
+              setIsUploading(false);
+              setShowDuplicateModal(false);
+              setPaymentDetails({
+                paymentId: response.razorpay_payment_id,
+                orderId: response.razorpay_order_id,
+              });
+              setSuccessSubmission(res.submission);
+            }, 300);
           } catch (error) {
-            setPaymentError(error instanceof Error ? error.message : 'Unable to verify payment.');
-          } finally {
-            setIsPaying(false);
+            setIsUploading(false);
+            setUploadProgress(0);
+            setErrorMessage(error instanceof Error ? error.message : 'Unable to complete submission after payment.');
           }
         },
       });
 
       checkout.on('payment.failed', (response) => {
-        setPaymentError(response.error?.description || 'Payment failed. Please try again.');
+        setErrorMessage(response.error?.description || 'Payment failed. Document has NOT been submitted.');
         setIsPaying(false);
       });
       checkout.open();
     } catch (error) {
-      setPaymentError(error instanceof Error ? error.message : 'Unable to start payment.');
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to start payment.');
       setIsPaying(false);
     }
   };
@@ -246,59 +346,7 @@ export default function UploadPage({ params }: UploadPageProps) {
   };
 
   const executeUpload = async (replaceExisting = false) => {
-    if (!section || !file) return;
-
-    setIsUploading(true);
-    setUploadProgress(15);
-    setErrorMessage('');
-
-    try {
-      // Simulate smooth upload progress
-      const progressTimer = setInterval(() => {
-        setUploadProgress((prev) => {
-          if (prev >= 90) {
-            clearInterval(progressTimer);
-            return 90;
-          }
-          return prev + 25;
-        });
-      }, 150);
-
-      const res = await DataStore.createOrReplaceSubmission({
-        upload_section_id: section.id,
-        name,
-        roll_number: rollNumber,
-        department,
-        fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type || 'application/pdf',
-        pageCount: Number(pageCount),
-        file,
-        replaceExisting,
-      });
-
-      clearInterval(progressTimer);
-      setUploadProgress(100);
-
-      setTimeout(() => {
-        setIsUploading(false);
-        setShowDuplicateModal(false);
-        setSuccessSubmission(res.submission);
-        void startPayment(res.submission);
-      }, 300);
-    } catch (err: unknown) {
-      setIsUploading(false);
-      setUploadProgress(0);
-
-      const message = err instanceof Error ? err.message : 'Failed to upload document. Please try again.';
-      if (message === 'DUPLICATE_SUBMISSION') {
-        const found = await DataStore.getSubmissionByRollNumber(section.id, rollNumber);
-        setExistingSubmission(found);
-        setShowDuplicateModal(true);
-      } else {
-        setErrorMessage(message);
-      }
-    }
+    await handlePaymentAndSubmit(replaceExisting);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -320,7 +368,7 @@ export default function UploadPage({ params }: UploadPageProps) {
       return;
     }
 
-    await executeUpload(false);
+    await handlePaymentAndSubmit(false);
   };
 
   if (loading) {
@@ -435,7 +483,7 @@ export default function UploadPage({ params }: UploadPageProps) {
           {successSubmission.payment_status !== 'Paid' && (
             <button
               type="button"
-              onClick={() => void startPayment(successSubmission)}
+              onClick={() => void handlePaymentAndSubmit(true)}
               disabled={isPaying}
               className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -692,7 +740,7 @@ export default function UploadPage({ params }: UploadPageProps) {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isUploading}
+                disabled={isUploading || isPaying}
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-600 px-6 py-3 text-sm font-semibold text-white shadow-2xs hover:bg-sky-700 active:scale-[0.99] disabled:opacity-50 transition-all cursor-pointer"
               >
                 {isUploading ? (
@@ -702,10 +750,10 @@ export default function UploadPage({ params }: UploadPageProps) {
                   </>
                 ) : (
                   <>
-                    <Upload className="h-4 w-4" />
+                    <CreditCard className="h-4 w-4" />
                     <span>
                       {file
-                        ? `Upload Report (${formatCurrency(calculatePrintAmount(Number(pageCount), section.xerox_rate, section.extra_charge))})`
+                        ? `Pay ${formatCurrency(calculatePrintAmount(Number(pageCount), section.xerox_rate, section.extra_charge))} & Submit Report`
                         : 'Upload Report'}
                     </span>
                   </>
@@ -748,7 +796,10 @@ export default function UploadPage({ params }: UploadPageProps) {
               Cancel
             </button>
             <button
-              onClick={() => executeUpload(true)}
+              onClick={() => {
+                setShowDuplicateModal(false);
+                void handlePaymentAndSubmit(true);
+              }}
               className="flex-1 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-amber-700 shadow-2xs"
             >
               Replace Existing File

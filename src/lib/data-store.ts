@@ -365,6 +365,8 @@ export const DataStore = {
     pageCount: number;
     file: File;
     replaceExisting?: boolean;
+    payment_status?: PaymentStatus;
+    payment_method?: string;
   }): Promise<{ submission: Submission; replaced: boolean }> {
     const cleanRoll = params.roll_number.trim().toUpperCase();
     const cleanName = params.name.trim().toUpperCase();
@@ -415,7 +417,7 @@ export const DataStore = {
         submission_status: 'Uploaded', // Reset verification on replacement as requested
         // Preserve payment/Xerox status unless altered by admin
         xerox_status: existing.xerox_status,
-        payment_status: existing.payment_status,
+        payment_status: params.payment_status || existing.payment_status,
       };
 
       if (isSupabaseConfigured() && supabase) {
@@ -452,7 +454,7 @@ export const DataStore = {
       amount,
       submission_status: 'Uploaded',
       xerox_status: 'Pending',
-      payment_status: 'Pending',
+      payment_status: params.payment_status || 'Pending',
       uploaded_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

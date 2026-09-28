@@ -3,8 +3,13 @@ import crypto from 'node:crypto';
 
 export function getRazorpayCredentials() {
   const keyId =
-    process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    process.env.RAZORPAY_KEY_ID ||
+    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+    'rzp_test_ThKvAuVb10Cyec';
+
+  const keySecret =
+    process.env.RAZORPAY_KEY_SECRET ||
+    'Pyzg4Pz4L5BVl2nUpzYg3I4i';
 
   return { keyId, keySecret };
 }
@@ -28,7 +33,7 @@ export function verifyRazorpaySignature(
   signature: string,
   secret?: string
 ): boolean {
-  const keySecret = secret || process.env.RAZORPAY_KEY_SECRET;
+  const keySecret = secret || getRazorpayCredentials().keySecret;
   if (!keySecret) {
     return false;
   }
