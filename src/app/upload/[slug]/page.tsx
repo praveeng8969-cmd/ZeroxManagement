@@ -31,8 +31,6 @@ import {
   Check,
 } from 'lucide-react';
 
-import { RazorpaySuccessResponse } from '@/types/razorpay';
-
 interface UploadPageProps {
   params: Promise<{ slug: string }>;
 }
@@ -58,34 +56,8 @@ export default function UploadPage({ params }: UploadPageProps) {
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [existingSubmission, setExistingSubmission] = useState<Submission | null>(null);
   const [successSubmission, setSuccessSubmission] = useState<Submission | null>(null);
-  const [isPaying, setIsPaying] = useState(false);
-  const [paymentError, setPaymentError] = useState('');
-  const [paymentDetails, setPaymentDetails] = useState<{ paymentId: string; orderId: string } | null>(null);
 
-  const loadRazorpay = () =>
-    new Promise<boolean>((resolve) => {
-      if (window.Razorpay) {
-        resolve(true);
-        return;
-      }
-
-      const existingScript = document.querySelector<HTMLScriptElement>(
-        'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
-      );
-      if (existingScript) {
-        existingScript.addEventListener('load', () => resolve(true), { once: true });
-        existingScript.addEventListener('error', () => resolve(false), { once: true });
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-
-  const handlePaymentAndSubmit = async (replaceExisting = false) => {
+  const executeUpload = async (replaceExisting = false) => {
     if (!section) return;
     if (!name.trim()) {
       setErrorMessage('Please enter your full name.');
@@ -105,9 +77,8 @@ export default function UploadPage({ params }: UploadPageProps) {
     }
 
     setErrorMessage('');
-    setPaymentError('');
 
-    // 1. Check duplicate submission first before initiating payment
+    // Check duplicate submission first before uploading
     if (!replaceExisting) {
       try {
         const found = await DataStore.getSubmissionByRollNumber(section.id, rollNumber);
@@ -121,136 +92,55 @@ export default function UploadPage({ params }: UploadPageProps) {
       }
     }
 
-    const totalAmount = calculatePrintAmount(
-      Number(pageCount),
-      section.xerox_rate,
-      section.extra_charge
-    );
-    const amountInPaise = Math.max(100, Math.round(totalAmount * 100));
-
-    setIsPaying(true);
+    setIsUploading(true);
+    setUploadProgress(15);
 
     try {
-      const loaded = await loadRazorpay();
-      if (!loaded || !window.Razorpay) {
-        throw new Error('Unable to load the payment window. Check your internet connection and retry.');
-      }
-
-      const orderResponse = await fetch('/api/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: amountInPaise,
-          currency: 'INR',
-          receipt: `rcpt_${Date.now()}_${rollNumber.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)}`,
-          notes: {
-            roll_number: rollNumber,
-            name,
-            department: department || '',
-            section_id: section.id,
-            section_title: section.title,
-          },
-        }),
-      });
-
-      const order = await orderResponse.json();
-      if (!orderResponse.ok) throw new Error(order.error || 'Unable to start payment.');
-
-      const checkout = new window.Razorpay({
-        key: order.key_id || order.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-        amount: order.amount,
-        currency: order.currency || 'INR',
-        name: 'Xerox Printing Desk',
-        description: `${section?.title || 'Document printing'} - ${rollNumber}`,
-        order_id: order.order_id || order.orderId,
-        prefill: { name },
-        notes: {
-          roll_number: rollNumber,
-          section_id: section.id,
-        },
-        theme: { color: '#0284c7' },
-        modal: {
-          ondismiss: () => {
-            setIsPaying(false);
-            setErrorMessage('Payment was cancelled. Your document has NOT been submitted and no invoice was generated.');
-          },
-        },
-        handler: async (response: RazorpaySuccessResponse) => {
-          try {
-            setIsPaying(false);
-            setIsUploading(true);
-            setUploadProgress(20);
-
-            // Verify payment signature on backend
-            const verifyResponse = await fetch('/api/verify-payment', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              }),
-            });
-
-            const verifyResult = await verifyResponse.json();
-            if (!verifyResponse.ok || !verifyResult.success) {
-              throw new Error(verifyResult.error || 'Payment signature verification failed.');
-            }
-
-            // ONLY AFTER PAYMENT IS COMPLETED & VERIFIED: upload file and create submission record!
-            const progressTimer = setInterval(() => {
-              setUploadProgress((prev) => {
-                if (prev >= 90) {
-                  clearInterval(progressTimer);
-                  return 90;
-                }
-                return prev + 25;
-              });
-            }, 120);
-
-            const res = await DataStore.createOrReplaceSubmission({
-              upload_section_id: section.id,
-              name,
-              roll_number: rollNumber,
-              department,
-              fileName: file.name,
-              fileSize: file.size,
-              mimeType: file.type || 'application/pdf',
-              pageCount: Number(pageCount),
-              file,
-              replaceExisting,
-              payment_status: 'Paid',
-              payment_method: `Razorpay (${response.razorpay_payment_id})`,
-            });
-
+      const progressTimer = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev >= 90) {
             clearInterval(progressTimer);
-            setUploadProgress(100);
-
-            setTimeout(() => {
-              setIsUploading(false);
-              setShowDuplicateModal(false);
-              setPaymentDetails({
-                paymentId: response.razorpay_payment_id,
-                orderId: response.razorpay_order_id,
-              });
-              setSuccessSubmission(res.submission);
-            }, 300);
-          } catch (error) {
-            setIsUploading(false);
-            setUploadProgress(0);
-            setErrorMessage(error instanceof Error ? error.message : 'Unable to complete submission after payment.');
+            return 90;
           }
-        },
+          return prev + 25;
+        });
+      }, 120);
+
+      const res = await DataStore.createOrReplaceSubmission({
+        upload_section_id: section.id,
+        name,
+        roll_number: rollNumber,
+        department,
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type || 'application/pdf',
+        pageCount: Number(pageCount),
+        file,
+        replaceExisting,
+        payment_status: 'Pending',
+        payment_method: 'Pay at Counter / Cash',
       });
 
-      checkout.on('payment.failed', (response) => {
-        setErrorMessage(response.error?.description || 'Payment failed. Document has NOT been submitted.');
-        setIsPaying(false);
-      });
-      checkout.open();
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to start payment.');
-      setIsPaying(false);
+      clearInterval(progressTimer);
+      setUploadProgress(100);
+
+      setTimeout(() => {
+        setIsUploading(false);
+        setShowDuplicateModal(false);
+        setSuccessSubmission(res.submission);
+      }, 300);
+    } catch (err: unknown) {
+      setIsUploading(false);
+      setUploadProgress(0);
+
+      const message = err instanceof Error ? err.message : 'Failed to upload document. Please try again.';
+      if (message === 'DUPLICATE_SUBMISSION') {
+        const found = await DataStore.getSubmissionByRollNumber(section.id, rollNumber);
+        setExistingSubmission(found);
+        setShowDuplicateModal(true);
+      } else {
+        setErrorMessage(message);
+      }
     }
   };
 
@@ -370,7 +260,7 @@ export default function UploadPage({ params }: UploadPageProps) {
       return;
     }
 
-    await handlePaymentAndSubmit(false);
+    await executeUpload(false);
   };
 
   if (loading) {
@@ -439,13 +329,13 @@ export default function UploadPage({ params }: UploadPageProps) {
                 <CheckCircle2 className="h-9 w-9" />
               </div>
               <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-emerald-700 border border-emerald-200">
-                Payment & Upload Complete
+                Document Uploaded Successfully
               </span>
               <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold text-slate-900">
                 Print Request Received!
               </h1>
               <p className="mt-1 text-xs text-slate-500 max-w-md">
-                Your report has been submitted to the printing desk queue. Present your Roll Number at the counter for collection.
+                Your report has been submitted to the printing desk queue. Present your Roll Number at the Xerox counter for printing and payment.
               </p>
             </div>
 
@@ -496,23 +386,21 @@ export default function UploadPage({ params }: UploadPageProps) {
                     {successSubmission.page_count} pages
                   </span>
                 </div>
+                <div className="grid grid-cols-2 py-2">
+                  <span className="text-slate-500 text-xs">Payment Status</span>
+                  <div className="text-right">
+                    <StatusBadge status={successSubmission.payment_status} size="sm" />
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 py-2.5 bg-emerald-50/50 -mx-5 px-5">
                   <span className="font-bold text-emerald-900 text-xs flex items-center gap-1.5">
-                    <CreditCard className="h-4 w-4 text-emerald-700" />
-                    Amount Paid
+                    <IndianRupee className="h-4 w-4 text-emerald-700" />
+                    Amount Payable
                   </span>
                   <span className="font-extrabold text-emerald-700 text-right text-base">
                     {formatCurrency(successSubmission.amount)}
                   </span>
                 </div>
-                {paymentDetails?.paymentId && (
-                  <div className="grid grid-cols-2 py-2 text-[11px]">
-                    <span className="text-slate-500">Transaction Ref</span>
-                    <span className="font-mono font-semibold text-slate-600 text-right truncate">
-                      {paymentDetails.paymentId}
-                    </span>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -854,7 +742,7 @@ export default function UploadPage({ params }: UploadPageProps) {
 
                     <div className="flex items-center gap-2 pt-1 text-[11px] text-slate-500">
                       <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      <span>100% Safe Checkout via Razorpay • UPI, GooglePay, PhonePe, Cards, NetBanking</span>
+                      <span>Instant print queue submission • Pay at the Xerox counter when collecting your prints</span>
                     </div>
                   </div>
                 )}
@@ -878,10 +766,10 @@ export default function UploadPage({ params }: UploadPageProps) {
                   </div>
                 )}
 
-                {/* Submit / Pay Button */}
+                {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={isUploading || isPaying}
+                  disabled={isUploading}
                   className="w-full inline-flex items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-sky-600 via-sky-600 to-indigo-600 px-6 py-4 text-sm sm:text-base font-bold text-white shadow-lg shadow-sky-600/25 hover:from-sky-700 hover:to-indigo-700 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
                 >
                   {isUploading ? (
@@ -889,18 +777,13 @@ export default function UploadPage({ params }: UploadPageProps) {
                       <RefreshCw className="h-5 w-5 animate-spin" />
                       <span>Uploading Report & Generating Receipt...</span>
                     </>
-                  ) : isPaying ? (
-                    <>
-                      <RefreshCw className="h-5 w-5 animate-spin" />
-                      <span>Opening Secure Razorpay Window...</span>
-                    </>
                   ) : (
                     <>
-                      <CreditCard className="h-5 w-5" />
+                      <UploadCloud className="h-5 w-5" />
                       <span>
                         {file && calculatedTotal > 0
-                          ? `Pay ${formatCurrency(calculatedTotal)} & Submit Report`
-                          : 'Select Document to Calculate Fee'}
+                          ? `Submit Print Request (${formatCurrency(calculatedTotal)})`
+                          : 'Upload & Submit Document'}
                       </span>
                     </>
                   )}
@@ -944,7 +827,7 @@ export default function UploadPage({ params }: UploadPageProps) {
                 type="button"
                 onClick={() => {
                   setShowDuplicateModal(false);
-                  void handlePaymentAndSubmit(true);
+                  void executeUpload(true);
                 }}
                 className="flex-1 rounded-xl bg-amber-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-700 shadow-sm cursor-pointer"
               >
