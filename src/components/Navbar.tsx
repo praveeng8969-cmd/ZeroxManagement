@@ -30,8 +30,15 @@ export function Navbar() {
           </div>
         </Link>
 
-        {/* Navigation links - completely clean, no public admin link */}
-        <nav className="flex items-center gap-4">
+        {/* Navigation links */}
+        <nav className="flex items-center gap-3">
+          <Link
+            href="/checkout"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-100 transition-colors"
+          >
+            <span>Pay Online</span>
+          </Link>
+
           {isAdminRoute && (
             <Link
               href="/"

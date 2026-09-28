@@ -24,6 +24,8 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
+import { RazorpaySuccessResponse } from '@/types/razorpay';
+
 interface UploadPageProps {
   params: Promise<{ slug: string }>;
 }
@@ -49,6 +51,102 @@ export default function UploadPage({ params }: UploadPageProps) {
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [existingSubmission, setExistingSubmission] = useState<Submission | null>(null);
   const [successSubmission, setSuccessSubmission] = useState<Submission | null>(null);
+  const [isPaying, setIsPaying] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
+
+  const loadRazorpay = () =>
+    new Promise<boolean>((resolve) => {
+      if (window.Razorpay) {
+        resolve(true);
+        return;
+      }
+
+      const existingScript = document.querySelector<HTMLScriptElement>(
+        'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+      );
+      if (existingScript) {
+        existingScript.addEventListener('load', () => resolve(true), { once: true });
+        existingScript.addEventListener('error', () => resolve(false), { once: true });
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+
+  const startPayment = async (submission: Submission) => {
+    setIsPaying(true);
+    setPaymentError('');
+
+    try {
+      const loaded = await loadRazorpay();
+      if (!loaded || !window.Razorpay) {
+        throw new Error('Unable to load the payment window. Check your internet connection and retry.');
+      }
+
+      const orderResponse = await fetch('/api/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId: submission.id }),
+      });
+      const order = await orderResponse.json();
+      if (!orderResponse.ok) throw new Error(order.error || 'Unable to start payment.');
+
+      const checkout = new window.Razorpay({
+        key: order.key_id || order.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: order.amount,
+        currency: order.currency || 'INR',
+        name: 'Xerox Desk',
+        description: `${section?.title || 'Document printing'} - ${submission.roll_number}`,
+        order_id: order.order_id || order.orderId,
+        prefill: { name: submission.name },
+        notes: { submission_id: submission.id },
+        theme: { color: '#0284c7' },
+        modal: {
+          ondismiss: () => {
+            setIsPaying(false);
+            setPaymentError('Payment was cancelled by user.');
+          },
+        },
+        handler: async (response: RazorpaySuccessResponse) => {
+          try {
+            const verifyResponse = await fetch('/api/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                submission_id: submission.id,
+              }),
+            });
+            const result = await verifyResponse.json();
+            if (!verifyResponse.ok || !result.success) throw new Error(result.error || 'Unable to verify payment.');
+
+            setSuccessSubmission((current) =>
+              current ? { ...current, payment_status: 'Paid' } : current
+            );
+          } catch (error) {
+            setPaymentError(error instanceof Error ? error.message : 'Unable to verify payment.');
+          } finally {
+            setIsPaying(false);
+          }
+        },
+      });
+
+      checkout.on('payment.failed', (response) => {
+        setPaymentError(response.error?.description || 'Payment failed. Please try again.');
+        setIsPaying(false);
+      });
+      checkout.open();
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : 'Unable to start payment.');
+      setIsPaying(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -186,17 +284,19 @@ export default function UploadPage({ params }: UploadPageProps) {
         setIsUploading(false);
         setShowDuplicateModal(false);
         setSuccessSubmission(res.submission);
+        void startPayment(res.submission);
       }, 300);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsUploading(false);
       setUploadProgress(0);
 
-      if (err.message === 'DUPLICATE_SUBMISSION') {
+      const message = err instanceof Error ? err.message : 'Failed to upload document. Please try again.';
+      if (message === 'DUPLICATE_SUBMISSION') {
         const found = await DataStore.getSubmissionByRollNumber(section.id, rollNumber);
         setExistingSubmission(found);
         setShowDuplicateModal(true);
       } else {
-        setErrorMessage(err.message || 'Failed to upload document. Please try again.');
+        setErrorMessage(message);
       }
     }
   };
@@ -311,6 +411,10 @@ export default function UploadPage({ params }: UploadPageProps) {
               <span className="font-bold text-emerald-700 text-xs">{formatCurrency(successSubmission.amount)}</span>
             </div>
             <div className="flex justify-between border-b border-slate-200/60 pb-2">
+              <span className="text-slate-500 text-xs">Payment</span>
+              <StatusBadge status={successSubmission.payment_status} size="sm" />
+            </div>
+            <div className="flex justify-between border-b border-slate-200/60 pb-2">
               <span className="text-slate-500 text-xs">Uploaded At</span>
               <span className="font-medium text-slate-700 text-xs">{formatDate(successSubmission.uploaded_at)}</span>
             </div>
@@ -321,6 +425,30 @@ export default function UploadPage({ params }: UploadPageProps) {
               </span>
             </div>
           </div>
+
+          {paymentError && (
+            <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+              {paymentError}
+            </div>
+          )}
+
+          {successSubmission.payment_status !== 'Paid' && (
+            <button
+              type="button"
+              onClick={() => void startPayment(successSubmission)}
+              disabled={isPaying}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <IndianRupee className="h-4 w-4" />
+              {isPaying ? 'Opening secure payment...' : `Pay ${formatCurrency(successSubmission.amount)} Now`}
+            </button>
+          )}
+
+          {successSubmission.payment_status === 'Paid' && (
+            <div className="mt-5 flex items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-bold text-emerald-700">
+              <CheckCircle2 className="h-4 w-4" /> Payment completed successfully
+            </div>
+          )}
 
           <div className="mt-8 flex flex-col sm:flex-row gap-3">
             <button

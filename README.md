@@ -78,7 +78,13 @@ SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
 # Admin Credentials (for instant local / demo access)
 NEXT_PUBLIC_ADMIN_EMAIL=admin@printtrack.local
 ADMIN_DEFAULT_PASSWORD=adminprinttrack2026
+
+# Razorpay Payment Gateway (use test keys first)
+RAZORPAY_KEY_ID=rzp_test_your_key_id
+RAZORPAY_KEY_SECRET=your_key_secret
 ```
+
+After each upload, the app opens Razorpay Checkout. The server creates the order from the saved submission amount, verifies the returned signature and captured payment status, and only then marks the submission as paid. Switch to live keys only after a successful test-mode payment.
 
 > **Note**: PrintTrack includes a high-fidelity local data layer with seed data. Even before configuring external Supabase credentials, the entire application is 100% interactive, testable, and persistent out of the box!
 
