@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const adminClient = createAdminSupabaseClient();
+    const adminClient = await createAdminSupabaseClient();
     const { data, error } = await adminClient
       .from('upload_sections')
       .select('*, submissions(count)')
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       submissions_count: 0,
     };
 
-    const adminClient = createAdminSupabaseClient();
+    const adminClient = await createAdminSupabaseClient();
     const { data, error } = await adminClient
       .from('upload_sections')
       .insert([newSection])
@@ -73,7 +73,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Missing id or updates parameter' }, { status: 400 });
     }
 
-    const adminClient = createAdminSupabaseClient();
+    const adminClient = await createAdminSupabaseClient();
     const { data, error } = await adminClient
       .from('upload_sections')
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -128,7 +128,24 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Missing section id' }, { status: 400 });
     }
 
-    const adminClient = createAdminSupabaseClient();
+    const adminClient = await createAdminSupabaseClient();
+
+    // 1. Clean up storage files for all submissions in this section
+    try {
+      const { data: subs } = await adminClient
+        .from('submissions')
+        .select('file_path')
+        .eq('upload_section_id', id);
+
+      const paths = (subs || []).map((s: { file_path?: string }) => s.file_path).filter(Boolean) as string[];
+      if (paths.length > 0) {
+        await adminClient.storage.from('submissions').remove(paths);
+      }
+    } catch (storageErr) {
+      console.warn('Failed to clean up section storage files:', storageErr);
+    }
+
+    // 2. Delete the section
     const { error } = await adminClient.from('upload_sections').delete().eq('id', id);
 
     if (error) {

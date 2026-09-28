@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const sectionId = searchParams.get('section_id');
 
-    const adminClient = createAdminSupabaseClient();
+    const adminClient = await createAdminSupabaseClient();
     let query = adminClient
       .from('submissions')
       .select('*, upload_section:upload_sections(*)')
@@ -42,14 +42,64 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Missing id or ids parameter' }, { status: 400 });
     }
 
-    const adminClient = createAdminSupabaseClient();
+    const adminClient = await createAdminSupabaseClient();
 
     if (id) {
-      const { error } = await adminClient.from('submissions').delete().eq('id', id);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      // 1. Fetch file_path to delete from storage
+      try {
+        const { data: sub } = await adminClient
+          .from('submissions')
+          .select('file_path')
+          .eq('id', id)
+          .maybeSingle();
+
+        if (sub?.file_path) {
+          await adminClient.storage.from('submissions').remove([sub.file_path]);
+        }
+      } catch (storageErr) {
+        console.warn('Storage file deletion warning:', storageErr);
+      }
+
+      // 2. Delete row from submissions table
+      const { data, error } = await adminClient
+        .from('submissions')
+        .delete()
+        .eq('id', id)
+        .select();
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, deleted: data?.length ?? 1 });
     } else if (ids && ids.length > 0) {
-      const { error } = await adminClient.from('submissions').delete().in('id', ids);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      // 1. Fetch file_paths to delete from storage
+      try {
+        const { data: subs } = await adminClient
+          .from('submissions')
+          .select('file_path')
+          .in('id', ids);
+
+        const paths = (subs || []).map((s: { file_path?: string }) => s.file_path).filter(Boolean) as string[];
+        if (paths.length > 0) {
+          await adminClient.storage.from('submissions').remove(paths);
+        }
+      } catch (storageErr) {
+        console.warn('Storage bulk file deletion warning:', storageErr);
+      }
+
+      // 2. Delete rows from submissions table
+      const { data, error } = await adminClient
+        .from('submissions')
+        .delete()
+        .in('id', ids)
+        .select();
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, deleted: data?.length ?? ids.length });
     }
 
     return NextResponse.json({ success: true });

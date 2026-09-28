@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     let updatedData: unknown = null;
 
     try {
-      const adminClient = createAdminSupabaseClient();
+      const adminClient = await createAdminSupabaseClient();
       if (id) {
         const { data, error } = await adminClient
           .from('submissions')
