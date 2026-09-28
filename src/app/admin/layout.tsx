@@ -23,8 +23,28 @@ export default function AdminLayout({
         router.replace('/admin/login');
         return;
       }
+      AuthStore.ensureValidSession();
     }
     setChecked(true);
+
+    if (isLoginPage) return;
+
+    // Periodically verify & refresh session while tab is open
+    const interval = setInterval(() => {
+      AuthStore.ensureValidSession();
+    }, 5 * 60 * 1000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        AuthStore.ensureValidSession();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [pathname, isLoginPage, router]);
 
   if (isLoginPage) {

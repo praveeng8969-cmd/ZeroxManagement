@@ -119,6 +119,23 @@ function saveStoredSubmissions(submissions: Submission[]) {
 export const DataStore = {
   // 1. UPLOAD SECTIONS
   async getSections(): Promise<UploadSection[]> {
+    // 1. Try server API route (bypasses browser JWT expiry & RLS)
+    try {
+      if (typeof window !== 'undefined') {
+        const res = await fetch('/api/sections', { cache: 'no-store' });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data)) {
+            saveStoredSections(json.data);
+            return json.data;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('API getSections fetch failed, trying direct Supabase', e);
+    }
+
+    // 2. Direct Supabase Client fallback
     if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
@@ -127,10 +144,12 @@ export const DataStore = {
           .order('created_at', { ascending: false });
 
         if (!error && data) {
-          return data.map((sec: any) => ({
+          const mapped = data.map((sec: any) => ({
             ...sec,
             submissions_count: sec.submissions?.[0]?.count ?? 0,
           }));
+          saveStoredSections(mapped);
+          return mapped;
         }
       } catch (err) {
         console.warn('Supabase query failed, using local store', err);
@@ -147,6 +166,10 @@ export const DataStore = {
   },
 
   async getSectionBySlug(slug: string): Promise<UploadSection | null> {
+    const sections = await this.getSections();
+    const found = sections.find((s) => s.slug === slug);
+    if (found) return found;
+
     if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
@@ -166,11 +189,14 @@ export const DataStore = {
       }
     }
 
-    const sections = await this.getSections();
-    return sections.find((s) => s.slug === slug) || null;
+    return null;
   },
 
   async getSectionById(id: string): Promise<UploadSection | null> {
+    const sections = await this.getSections();
+    const found = sections.find((s) => s.id === id);
+    if (found) return found;
+
     if (isSupabaseConfigured() && supabase) {
       try {
         const { data, error } = await supabase
@@ -190,11 +216,30 @@ export const DataStore = {
       }
     }
 
-    const sections = await this.getSections();
-    return sections.find((s) => s.id === id) || null;
+    return null;
   },
 
   async createSection(input: CreateSectionInput): Promise<UploadSection> {
+    // 1. Try server API route
+    try {
+      const res = await fetch('/api/sections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          const current = getStoredSections();
+          saveStoredSections([json.data, ...current.filter((s) => s.id !== json.data.id)]);
+          notifySectionsUpdated();
+          return json.data;
+        }
+      }
+    } catch (apiErr) {
+      console.warn('API createSection error, fallback to direct supabase:', apiErr);
+    }
+
     const newSection: UploadSection = {
       ...input,
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'sec-' + Date.now(),
@@ -225,6 +270,30 @@ export const DataStore = {
   },
 
   async updateSection(id: string, updates: Partial<UploadSection>): Promise<UploadSection | null> {
+    // 1. Try server API route
+    try {
+      const res = await fetch('/api/sections', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, updates }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          const sections = getStoredSections();
+          const idx = sections.findIndex((s) => s.id === id);
+          if (idx !== -1) {
+            sections[idx] = { ...sections[idx], ...json.data };
+          }
+          saveStoredSections(sections);
+          notifySectionsUpdated();
+          return json.data;
+        }
+      }
+    } catch (apiErr) {
+      console.warn('API updateSection error, fallback to direct supabase:', apiErr);
+    }
+
     if (isSupabaseConfigured() && supabase) {
       const { data, error } = await supabase
         .from('upload_sections')
@@ -238,19 +307,15 @@ export const DataStore = {
       }
 
       if ('xerox_rate' in updates || 'extra_charge' in updates) {
-        const { data: sectionSubmissions, error: submissionsError } = await supabase
+        const { data: sectionSubmissions } = await supabase
           .from('submissions')
           .select('id, page_count')
           .eq('upload_section_id', id);
 
-        if (submissionsError) {
-          throw new Error(`Pricing saved, but existing totals could not be loaded: ${submissionsError.message}`);
-        }
-
         const pricePerPage = Number(data.xerox_rate) || 0;
         const extraCharge = Number(data.extra_charge) || 0;
-        const priceUpdates = (sectionSubmissions || []).map((submission) =>
-          supabase!
+        for (const submission of sectionSubmissions || []) {
+          await supabase
             .from('submissions')
             .update({
               amount: calculatePrintAmount(
@@ -260,12 +325,7 @@ export const DataStore = {
               ),
               updated_at: new Date().toISOString(),
             })
-            .eq('id', submission.id)
-        );
-        const results = await Promise.all(priceUpdates);
-        const pricingError = results.find((result) => result.error)?.error;
-        if (pricingError) {
-          throw new Error(`Pricing saved, but existing totals could not be updated: ${pricingError.message}`);
+            .eq('id', submission.id);
         }
       }
 
@@ -284,31 +344,41 @@ export const DataStore = {
     };
     sections[index] = updated;
     saveStoredSections(sections);
-
-    if ('xerox_rate' in updates || 'extra_charge' in updates) {
-      const submissions = getStoredSubmissions().map((submission) =>
-        submission.upload_section_id === id
-          ? {
-              ...submission,
-              amount: calculatePrintAmount(
-                Number(submission.page_count) || 1,
-                Number(updated.xerox_rate) || 0,
-                Number(updated.extra_charge) || 0
-              ),
-              updated_at: new Date().toISOString(),
-            }
-          : submission
-      );
-      saveStoredSubmissions(submissions);
-    }
+    notifySectionsUpdated();
     return updated;
   },
 
   async deleteSection(id: string): Promise<boolean> {
+    // 1. Try server API route
+    try {
+      const res = await fetch(`/api/sections?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        const sections = getStoredSections().filter((s) => s.id !== id);
+        saveStoredSections(sections);
+        const submissions = getStoredSubmissions().filter((s) => s.upload_section_id !== id);
+        saveStoredSubmissions(submissions);
+        notifySectionsUpdated();
+        notifySubmissionsUpdated();
+        return true;
+      }
+    } catch (apiErr) {
+      console.warn('API deleteSection error, fallback to direct supabase:', apiErr);
+    }
+
     if (isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase.from('upload_sections').delete().eq('id', id);
-        if (!error) return true;
+        if (!error) {
+          const sections = getStoredSections().filter((s) => s.id !== id);
+          saveStoredSections(sections);
+          const submissions = getStoredSubmissions().filter((s) => s.upload_section_id !== id);
+          saveStoredSubmissions(submissions);
+          notifySectionsUpdated();
+          notifySubmissionsUpdated();
+          return true;
+        }
       } catch (err) {
         console.warn('Supabase deleteSection fallback', err);
       }
@@ -318,11 +388,32 @@ export const DataStore = {
     saveStoredSections(sections);
     const submissions = getStoredSubmissions().filter((s) => s.upload_section_id !== id);
     saveStoredSubmissions(submissions);
+    notifySectionsUpdated();
+    notifySubmissionsUpdated();
     return true;
   },
 
   // 2. SUBMISSIONS
   async getSubmissions(sectionId?: string): Promise<Submission[]> {
+    // 1. Try server API route
+    try {
+      if (typeof window !== 'undefined') {
+        const url = `/api/submissions${sectionId ? `?section_id=${encodeURIComponent(sectionId)}` : ''}`;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data)) {
+            if (!sectionId) {
+              saveStoredSubmissions(json.data);
+            }
+            return json.data;
+          }
+        }
+      }
+    } catch (apiErr) {
+      console.warn('API getSubmissions fetch failed, trying direct Supabase', apiErr);
+    }
+
     if (isSupabaseConfigured() && supabase) {
       try {
         let query = supabase
@@ -335,7 +426,12 @@ export const DataStore = {
         }
 
         const { data, error } = await query;
-        if (!error && data) return data;
+        if (!error && data) {
+          if (!sectionId) {
+            saveStoredSubmissions(data);
+          }
+          return data;
+        }
       } catch (err) {
         console.warn('Supabase getSubmissions fallback', err);
       }
@@ -613,10 +709,32 @@ export const DataStore = {
   },
 
   async deleteSubmission(id: string): Promise<boolean> {
+    // 1. Try server API route
+    try {
+      const res = await fetch('/api/submissions', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        const all = getStoredSubmissions().filter((s) => s.id !== id);
+        saveStoredSubmissions(all);
+        notifySubmissionsUpdated();
+        return true;
+      }
+    } catch (apiErr) {
+      console.warn('API deleteSubmission error, fallback to direct supabase:', apiErr);
+    }
+
     if (isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase.from('submissions').delete().eq('id', id);
-        if (!error) return true;
+        if (!error) {
+          const all = getStoredSubmissions().filter((s) => s.id !== id);
+          saveStoredSubmissions(all);
+          notifySubmissionsUpdated();
+          return true;
+        }
       } catch (e) {
         console.warn('Supabase delete submission error', e);
       }
@@ -624,14 +742,37 @@ export const DataStore = {
 
     const all = getStoredSubmissions().filter((s) => s.id !== id);
     saveStoredSubmissions(all);
+    notifySubmissionsUpdated();
     return true;
   },
 
   async bulkDeleteSubmissions(ids: string[]): Promise<boolean> {
+    // 1. Try server API route
+    try {
+      const res = await fetch('/api/submissions', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (res.ok) {
+        const all = getStoredSubmissions().filter((s) => !ids.includes(s.id));
+        saveStoredSubmissions(all);
+        notifySubmissionsUpdated();
+        return true;
+      }
+    } catch (apiErr) {
+      console.warn('API bulkDeleteSubmissions error, fallback to direct supabase:', apiErr);
+    }
+
     if (isSupabaseConfigured() && supabase) {
       try {
         const { error } = await supabase.from('submissions').delete().in('id', ids);
-        if (!error) return true;
+        if (!error) {
+          const all = getStoredSubmissions().filter((s) => !ids.includes(s.id));
+          saveStoredSubmissions(all);
+          notifySubmissionsUpdated();
+          return true;
+        }
       } catch (e) {
         console.warn('Supabase bulk delete submissions error', e);
       }
@@ -639,6 +780,7 @@ export const DataStore = {
 
     const all = getStoredSubmissions().filter((s) => !ids.includes(s.id));
     saveStoredSubmissions(all);
+    notifySubmissionsUpdated();
     return true;
   },
 

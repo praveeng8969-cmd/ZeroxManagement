@@ -5,10 +5,32 @@ const ADMIN_SESSION_KEY = 'printtrack_admin_session';
 export interface AdminUser {
   email: string;
   role: 'admin';
+  token?: string;
+}
+
+// Auto-refresh token listener when running in the browser
+if (typeof window !== 'undefined' && isSupabaseConfigured() && supabase) {
+  try {
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        localStorage.setItem(
+          ADMIN_SESSION_KEY,
+          JSON.stringify({
+            email: session.user.email || 'admin@zerox.local',
+            role: 'admin',
+            token: session.access_token,
+          })
+        );
+        document.cookie = `printtrack_auth=true; path=/; max-age=86400; SameSite=Lax`;
+      }
+    });
+  } catch (err) {
+    console.warn('Supabase auth listener setup error:', err);
+  }
 }
 
 export const AuthStore = {
-  async signIn(email: string, password: string):Promise<{ success: boolean; error?: string }> {
+  async signIn(email: string, password: string): Promise<{ success: boolean; error?: string }> {
     // 1. If real Supabase is configured
     if (isSupabaseConfigured() && supabase) {
       try {
@@ -23,7 +45,14 @@ export const AuthStore = {
 
         if (data.session) {
           if (typeof window !== 'undefined') {
-            localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ email, role: 'admin', token: data.session.access_token }));
+            localStorage.setItem(
+              ADMIN_SESSION_KEY,
+              JSON.stringify({
+                email,
+                role: 'admin',
+                token: data.session.access_token,
+              })
+            );
             document.cookie = `printtrack_auth=true; path=/; max-age=86400; SameSite=Lax`;
           }
           return { success: true };
@@ -75,6 +104,39 @@ export const AuthStore = {
     } catch {
       return false;
     }
+  },
+
+  async ensureValidSession(): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+    if (!this.isAuthenticated()) return false;
+
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
+          const expiresAt = data.session.expires_at ? data.session.expires_at * 1000 : 0;
+          // Refresh if expired or expiring within 10 minutes
+          if (expiresAt && Date.now() > expiresAt - 600000) {
+            const { data: refreshed } = await supabase.auth.refreshSession();
+            if (refreshed.session) {
+              localStorage.setItem(
+                ADMIN_SESSION_KEY,
+                JSON.stringify({
+                  email: refreshed.session.user.email || 'admin@zerox.local',
+                  role: 'admin',
+                  token: refreshed.session.access_token,
+                })
+              );
+              document.cookie = `printtrack_auth=true; path=/; max-age=86400; SameSite=Lax`;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Session check/refresh warning:', err);
+      }
+    }
+
+    return true;
   },
 
   getUser(): AdminUser | null {

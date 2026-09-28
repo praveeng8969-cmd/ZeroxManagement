@@ -78,7 +78,11 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
   useEffect(() => {
     loadData();
     window.addEventListener('printtrack_submissions_updated', loadData);
-    return () => window.removeEventListener('printtrack_submissions_updated', loadData);
+    window.addEventListener('printtrack_sections_updated', loadData);
+    return () => {
+      window.removeEventListener('printtrack_submissions_updated', loadData);
+      window.removeEventListener('printtrack_sections_updated', loadData);
+    };
   }, [resolvedParams.id]);
 
   const handleToggleStatus = async () => {

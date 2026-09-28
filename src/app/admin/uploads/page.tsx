@@ -44,7 +44,11 @@ export default function AdminUploadsPage() {
   useEffect(() => {
     loadData();
     window.addEventListener('printtrack_sections_updated', loadData);
-    return () => window.removeEventListener('printtrack_sections_updated', loadData);
+    window.addEventListener('printtrack_submissions_updated', loadData);
+    return () => {
+      window.removeEventListener('printtrack_sections_updated', loadData);
+      window.removeEventListener('printtrack_submissions_updated', loadData);
+    };
   }, []);
 
   const handleToggleStatus = async (sec: UploadSection) => {
