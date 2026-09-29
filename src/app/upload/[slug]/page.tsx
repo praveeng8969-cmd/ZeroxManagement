@@ -7,17 +7,14 @@ import Link from 'next/link';
 import { UploadSection, Submission } from '@/types';
 import { DataStore } from '@/lib/data-store';
 import { calculatePrintAmount, formatCurrency, formatDate, formatBytes } from '@/lib/utils';
-import { StatusBadge } from '@/components/StatusBadge';
 import { Modal } from '@/components/Modal';
+import { PaymentCard } from '@/components/payment/PaymentCard';
 import { PDFDocument } from 'pdf-lib';
 import {
   UploadCloud,
   FileText,
   AlertTriangle,
-  CheckCircle2,
   Calendar,
-  IndianRupee,
-  CreditCard,
   ArrowLeft,
   Lock,
   Sparkles,
@@ -27,7 +24,6 @@ import {
   Building2,
   ShieldCheck,
   Printer,
-  Clock,
   Check,
 } from 'lucide-react';
 
@@ -320,125 +316,52 @@ export default function UploadPage({ params }: UploadPageProps) {
           </div>
         </div>
 
-        {/* SUCCESS STATE - OFFICIAL DIGITAL RECEIPT */}
+        {/* SUCCESS & PAYMENT FLOW STATE */}
         {successSubmission ? (
-          <div className="rounded-3xl border border-emerald-200/80 bg-white p-6 sm:p-10 shadow-xl shadow-emerald-500/5 animate-in fade-in zoom-in-95">
-            {/* Header Badge */}
-            <div className="flex flex-col items-center text-center">
-              <div className="relative mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-lg shadow-emerald-600/25">
-                <CheckCircle2 className="h-9 w-9" />
-              </div>
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-emerald-700 border border-emerald-200">
-                Document Uploaded Successfully
-              </span>
-              <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold text-slate-900">
-                Print Request Received!
-              </h1>
-              <p className="mt-1 text-xs text-slate-500 max-w-md">
-                Your report has been submitted to the printing desk queue. Present your Roll Number at the Xerox counter for printing and payment.
-              </p>
-            </div>
+          <div className="space-y-4">
+            <PaymentCard
+              submission={successSubmission}
+              section={section}
+              onPaymentSuccess={(pid) => {
+                setSuccessSubmission((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        payment_status: 'Paid',
+                        razorpay_payment_id: pid,
+                      }
+                    : null
+                );
+              }}
+            />
 
-            {/* Official Digital Receipt Card */}
-            <div className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/60 shadow-xs">
-              <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-100/70 px-5 py-3 text-xs font-bold text-slate-700">
-                <div className="flex items-center gap-2">
-                  <Printer className="h-4 w-4 text-sky-600" />
-                  <span>Xerox Desk Digital Receipt</span>
-                </div>
-                <span className="font-mono text-[11px] text-slate-500">
-                  {formatDate(successSubmission.uploaded_at)}
-                </span>
-              </div>
-
-              <div className="divide-y divide-slate-200/60 p-5 text-xs sm:text-sm">
-                <div className="grid grid-cols-2 py-2">
-                  <span className="text-slate-500 text-xs">Upload Section</span>
-                  <span className="font-bold text-slate-900 text-right">{section.title}</span>
-                </div>
-                <div className="grid grid-cols-2 py-2">
-                  <span className="text-slate-500 text-xs">Student Name</span>
-                  <span className="font-bold text-slate-900 text-right">{successSubmission.name}</span>
-                </div>
-                <div className="grid grid-cols-2 py-2">
-                  <span className="text-slate-500 text-xs">Roll Number</span>
-                  <span className="font-mono font-bold text-sky-700 text-right">
-                    {successSubmission.roll_number}
-                  </span>
-                </div>
-                {successSubmission.department && (
-                  <div className="grid grid-cols-2 py-2">
-                    <span className="text-slate-500 text-xs">Department / Class</span>
-                    <span className="font-medium text-slate-800 text-right">
-                      {successSubmission.department}
-                    </span>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 py-2">
-                  <span className="text-slate-500 text-xs">Submitted Document</span>
-                  <span className="font-semibold text-slate-800 text-right truncate">
-                    {successSubmission.file_name}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 py-2">
-                  <span className="text-slate-500 text-xs">Pages Detected</span>
-                  <span className="font-bold text-slate-900 text-right">
-                    {successSubmission.page_count} pages
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 py-2">
-                  <span className="text-slate-500 text-xs">Payment Status</span>
-                  <div className="text-right">
-                    <StatusBadge status={successSubmission.payment_status} size="sm" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 py-2.5 bg-emerald-50/50 -mx-5 px-5">
-                  <span className="font-bold text-emerald-900 text-xs flex items-center gap-1.5">
-                    <IndianRupee className="h-4 w-4 text-emerald-700" />
-                    Amount Payable
-                  </span>
-                  <span className="font-extrabold text-emerald-700 text-right text-base">
-                    {formatCurrency(successSubmission.amount)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Receipt Action Buttons */}
-            <div className="mt-6 flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 pt-2">
               <button
-                onClick={() => window.print()}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
-              >
-                <Printer className="h-4 w-4 text-slate-500" />
-                <span>Print / Save Receipt</span>
-              </button>
-
-              <button
+                type="button"
                 onClick={() => {
                   setSuccessSubmission(null);
                   setFile(null);
                   setName('');
                   setRollNumber('');
                   setDepartment('');
+                  setPageCount('');
+                  setUploadProgress(0);
                 }}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-3 text-xs font-bold text-white shadow-md shadow-sky-600/20 hover:bg-sky-700 active:scale-95 transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
               >
-                <UploadCloud className="h-4 w-4" />
+                <UploadCloud className="h-4 w-4 text-slate-400" />
                 <span>Upload Another Report</span>
               </button>
-            </div>
 
-            {section.public_submission_list && (
-              <div className="mt-4 text-center">
+              {section.public_submission_list && (
                 <Link
                   href={`/submissions/${section.slug}`}
                   className="text-xs font-semibold text-sky-600 hover:text-sky-800 hover:underline"
                 >
-                  View Public Submissions Queue for this Section →
+                  View Public Queue for this Section →
                 </Link>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ) : (
           /* ACTIVE UPLOAD FORM VIEW */

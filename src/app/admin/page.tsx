@@ -50,11 +50,14 @@ export default function AdminDashboardPage() {
       const readyToPrint = allSubmissions.filter((s) => s.xerox_status === 'Ready to Print').length;
       const printed = allSubmissions.filter((s) => s.xerox_status === 'Printed').length;
       const xeroxTaken = allSubmissions.filter((s) => s.xerox_status === 'Taken').length;
-      const expectedAmount = allSubmissions.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+      const isPaid = (s: Submission) => String(s.payment_status || '').toLowerCase() === 'paid';
+      const getAmount = (s: Submission) => Number(s.payment_amount) || Number(s.amount) || 0;
+
+      const expectedAmount = allSubmissions.reduce((sum, s) => sum + getAmount(s), 0);
       const receivedAmount = allSubmissions
-        .filter((s) => s.payment_status === 'Paid')
-        .reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
-      const pendingAmount = expectedAmount - receivedAmount;
+        .filter(isPaid)
+        .reduce((sum, s) => sum + getAmount(s), 0);
+      const pendingAmount = Math.max(0, expectedAmount - receivedAmount);
 
       setStats({
         total_sections: allSections.length,
@@ -85,7 +88,7 @@ export default function AdminDashboardPage() {
 
   const handleQuickStatus = async (
     subId: string,
-    updates: { xerox_status?: any; payment_status?: any; submission_status?: any }
+    updates: { xerox_status?: any; payment_status?: any; submission_status?: any; payment_source?: any }
   ) => {
     setRecentSubmissions((prev) =>
       prev.map((s) => (s.id === subId ? { ...s, ...updates } : s))
@@ -281,9 +284,15 @@ export default function AdminDashboardPage() {
                       />
                       <PaymentStatusSelector
                         currentStatus={sub.payment_status}
+                        paymentSource={sub.payment_source}
+                        paymentMethod={sub.payment_method}
+                        razorpayPaymentId={sub.razorpay_payment_id}
                         submissionId={sub.id}
-                        onStatusChange={(newStatus) =>
-                          handleQuickStatus(sub.id, { payment_status: newStatus })
+                        onStatusChange={(newStatus, newSource) =>
+                          handleQuickStatus(sub.id, {
+                            payment_status: newStatus,
+                            payment_source: newSource,
+                          })
                         }
                       />
                     </div>
@@ -326,9 +335,15 @@ export default function AdminDashboardPage() {
                         <td className="py-3 text-right whitespace-nowrap">
                           <PaymentStatusSelector
                             currentStatus={sub.payment_status}
+                            paymentSource={sub.payment_source}
+                            paymentMethod={sub.payment_method}
+                            razorpayPaymentId={sub.razorpay_payment_id}
                             submissionId={sub.id}
-                            onStatusChange={(newStatus) =>
-                              handleQuickStatus(sub.id, { payment_status: newStatus })
+                            onStatusChange={(newStatus, newSource) =>
+                              handleQuickStatus(sub.id, {
+                                payment_status: newStatus,
+                                payment_source: newSource,
+                              })
                             }
                           />
                         </td>

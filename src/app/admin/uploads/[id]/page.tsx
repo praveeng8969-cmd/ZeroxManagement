@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { UploadSection, Submission, FileStatus, XeroxStatus, PaymentStatus } from '@/types';
+import { UploadSection, Submission, FileStatus, XeroxStatus, PaymentStatus, PaymentSource } from '@/types';
 import { DataStore } from '@/lib/data-store';
 import { formatCurrency, formatDate, formatDateShort, formatBytes } from '@/lib/utils';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -98,6 +98,8 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
       submission_status?: FileStatus;
       xerox_status?: XeroxStatus;
       payment_status?: PaymentStatus;
+      payment_source?: PaymentSource;
+      payment_method?: string;
     }
   ) => {
     await DataStore.updateSubmissionStatus(subId, updates);
@@ -196,8 +198,11 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
     if (statusFilter === 'READY') return sub.xerox_status === 'Ready to Print';
     if (statusFilter === 'PRINTED') return sub.xerox_status === 'Printed';
     if (statusFilter === 'TAKEN') return sub.xerox_status === 'Taken';
-    if (statusFilter === 'PAID') return sub.payment_status === 'Paid';
-    if (statusFilter === 'UNPAID') return sub.payment_status === 'Pending';
+    const normPay = String(sub.payment_status || '').toLowerCase();
+    if (statusFilter === 'PAID') return normPay === 'paid';
+    if (statusFilter === 'UNPAID') return normPay === 'pending';
+    if (statusFilter === 'FAILED') return normPay === 'failed';
+    if (statusFilter === 'REFUNDED') return normPay === 'refunded';
     return true;
   });
 
@@ -207,12 +212,15 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
   const readyCount = submissions.filter((s) => s.xerox_status === 'Ready to Print').length;
   const printedCount = submissions.filter((s) => s.xerox_status === 'Printed').length;
   const takenCount = submissions.filter((s) => s.xerox_status === 'Taken').length;
-  const paidCount = submissions.filter((s) => s.payment_status === 'Paid').length;
-  const expectedRevenue = submissions.reduce((total, sub) => total + (Number(sub.amount) || 0), 0);
+  const isPaid = (s: Submission) => String(s.payment_status || '').toLowerCase() === 'paid';
+  const getSubAmount = (s: Submission) => Number(s.payment_amount) || Number(s.amount) || 0;
+
+  const paidCount = submissions.filter(isPaid).length;
+  const expectedRevenue = submissions.reduce((total, sub) => total + getSubAmount(sub), 0);
   const receivedRevenue = submissions
-    .filter((sub) => sub.payment_status === 'Paid')
-    .reduce((total, sub) => total + (Number(sub.amount) || 0), 0);
-  const pendingRevenue = expectedRevenue - receivedRevenue;
+    .filter(isPaid)
+    .reduce((total, sub) => total + getSubAmount(sub), 0);
+  const pendingRevenue = Math.max(0, expectedRevenue - receivedRevenue);
 
   return (
     <div className="space-y-6">
@@ -551,9 +559,15 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
                         </span>
                         <PaymentStatusSelector
                           currentStatus={sub.payment_status}
+                          paymentSource={sub.payment_source}
+                          paymentMethod={sub.payment_method}
+                          razorpayPaymentId={sub.razorpay_payment_id}
                           submissionId={sub.id}
-                          onStatusChange={(newStatus) =>
-                            handleUpdateStatus(sub.id, { payment_status: newStatus })
+                          onStatusChange={(newStatus, newSource) =>
+                            handleUpdateStatus(sub.id, {
+                              payment_status: newStatus,
+                              payment_source: newSource,
+                            })
                           }
                         />
                       </div>
@@ -700,9 +714,15 @@ export default function SectionManagePage({ params }: SectionManagePageProps) {
                         <td className="py-3 px-3 whitespace-nowrap">
                           <PaymentStatusSelector
                             currentStatus={sub.payment_status}
+                            paymentSource={sub.payment_source}
+                            paymentMethod={sub.payment_method}
+                            razorpayPaymentId={sub.razorpay_payment_id}
                             submissionId={sub.id}
-                            onStatusChange={(newStatus) =>
-                              handleUpdateStatus(sub.id, { payment_status: newStatus })
+                            onStatusChange={(newStatus, newSource) =>
+                              handleUpdateStatus(sub.id, {
+                                payment_status: newStatus,
+                                payment_source: newSource,
+                              })
                             }
                           />
                         </td>

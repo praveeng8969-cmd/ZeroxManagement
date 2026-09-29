@@ -11,8 +11,8 @@ interface StatusBadgeProps {
   className?: string;
 }
 
-export function StatusBadge({ status, type, size = 'md', className }: StatusBadgeProps) {
-  const norm = String(status).toLowerCase().trim();
+export function StatusBadge({ status, size = 'md', className }: StatusBadgeProps) {
+  const norm = String(status || '').toLowerCase().trim();
 
   let styles = 'bg-slate-100 text-slate-700 border-slate-200';
   let dotColor = 'bg-slate-400';
@@ -32,12 +32,15 @@ export function StatusBadge({ status, type, size = 'md', className }: StatusBadg
   else if (norm === 'uploaded') {
     styles = 'bg-sky-50 text-sky-700 border-sky-200';
     dotColor = 'bg-sky-500';
+    displayLabel = 'Uploaded';
   } else if (norm === 'verified') {
     styles = 'bg-indigo-50 text-indigo-700 border-indigo-200';
     dotColor = 'bg-indigo-500';
+    displayLabel = 'Verified';
   } else if (norm === 'rejected') {
     styles = 'bg-rose-50 text-rose-700 border-rose-200';
     dotColor = 'bg-rose-500';
+    displayLabel = 'Rejected';
   }
   // Xerox printing status
   else if (norm === 'ready to print' || norm === 'ready') {
@@ -47,17 +50,29 @@ export function StatusBadge({ status, type, size = 'md', className }: StatusBadg
   } else if (norm === 'printed') {
     styles = 'bg-amber-50 text-amber-800 border-amber-300';
     dotColor = 'bg-amber-500';
+    displayLabel = 'Printed';
   } else if (norm === 'taken') {
     styles = 'bg-emerald-50 text-emerald-800 border-emerald-300';
     dotColor = 'bg-emerald-500';
+    displayLabel = 'Taken';
   }
   // Payment status
   else if (norm === 'paid') {
     styles = 'bg-emerald-50 text-emerald-700 border-emerald-200';
     dotColor = 'bg-emerald-500';
+    displayLabel = 'Paid';
   } else if (norm === 'pending') {
     styles = 'bg-amber-50 text-amber-700 border-amber-200';
     dotColor = 'bg-amber-500';
+    displayLabel = 'Pending';
+  } else if (norm === 'failed') {
+    styles = 'bg-rose-50 text-rose-700 border-rose-200';
+    dotColor = 'bg-rose-500';
+    displayLabel = 'Failed';
+  } else if (norm === 'refunded') {
+    styles = 'bg-purple-50 text-purple-700 border-purple-200';
+    dotColor = 'bg-purple-500';
+    displayLabel = 'Refunded';
   }
 
   const sizeClasses = {

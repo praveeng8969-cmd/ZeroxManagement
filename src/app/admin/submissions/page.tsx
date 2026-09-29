@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Submission, UploadSection, FileStatus, XeroxStatus, PaymentStatus } from '@/types';
+import { Submission, UploadSection, FileStatus, XeroxStatus, PaymentStatus, PaymentSource } from '@/types';
 import { DataStore } from '@/lib/data-store';
 import { downloadSubmissionFile } from '@/lib/zip-download';
 import { formatCurrency, formatDateShort, formatBytes } from '@/lib/utils';
@@ -72,6 +72,8 @@ export default function AdminAllSubmissionsPage() {
       submission_status?: FileStatus;
       xerox_status?: XeroxStatus;
       payment_status?: PaymentStatus;
+      payment_source?: PaymentSource;
+      payment_method?: string;
     }
   ) => {
     // Optimistic UI update
@@ -145,8 +147,11 @@ export default function AdminAllSubmissionsPage() {
     if (statusFilter === 'READY') return sub.xerox_status === 'Ready to Print';
     if (statusFilter === 'PRINTED') return sub.xerox_status === 'Printed';
     if (statusFilter === 'TAKEN') return sub.xerox_status === 'Taken';
-    if (statusFilter === 'PAID') return sub.payment_status === 'Paid';
-    if (statusFilter === 'UNPAID') return sub.payment_status === 'Pending';
+    const normPay = String(sub.payment_status || '').toLowerCase();
+    if (statusFilter === 'PAID') return normPay === 'paid';
+    if (statusFilter === 'UNPAID') return normPay === 'pending';
+    if (statusFilter === 'FAILED') return normPay === 'failed';
+    if (statusFilter === 'REFUNDED') return normPay === 'refunded';
     return true;
   });
 
@@ -215,6 +220,8 @@ export default function AdminAllSubmissionsPage() {
               <option value="TAKEN">Xerox: Taken</option>
               <option value="PAID">Payment: Paid</option>
               <option value="UNPAID">Payment: Pending</option>
+              <option value="FAILED">Payment: Failed</option>
+              <option value="REFUNDED">Payment: Refunded</option>
               <option value="UPLOADED">File: Uploaded</option>
               <option value="VERIFIED">File: Verified</option>
               <option value="REJECTED">File: Rejected</option>
@@ -407,9 +414,15 @@ export default function AdminAllSubmissionsPage() {
                         </span>
                         <PaymentStatusSelector
                           currentStatus={sub.payment_status}
+                          paymentSource={sub.payment_source}
+                          paymentMethod={sub.payment_method}
+                          razorpayPaymentId={sub.razorpay_payment_id}
                           submissionId={sub.id}
-                          onStatusChange={(newStatus) =>
-                            handleUpdateStatus(sub.id, { payment_status: newStatus })
+                          onStatusChange={(newStatus, newSource) =>
+                            handleUpdateStatus(sub.id, {
+                              payment_status: newStatus,
+                              payment_source: newSource,
+                            })
                           }
                         />
                       </div>
@@ -569,9 +582,15 @@ export default function AdminAllSubmissionsPage() {
                         <td className="py-3 px-3 whitespace-nowrap">
                           <PaymentStatusSelector
                             currentStatus={sub.payment_status}
+                            paymentSource={sub.payment_source}
+                            paymentMethod={sub.payment_method}
+                            razorpayPaymentId={sub.razorpay_payment_id}
                             submissionId={sub.id}
-                            onStatusChange={(newStatus) =>
-                              handleUpdateStatus(sub.id, { payment_status: newStatus })
+                            onStatusChange={(newStatus, newSource) =>
+                              handleUpdateStatus(sub.id, {
+                                payment_status: newStatus,
+                                payment_source: newSource,
+                              })
                             }
                           />
                         </td>
@@ -651,8 +670,38 @@ export default function AdminAllSubmissionsPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Amount:</span>
-                <span className="font-bold text-slate-900">{formatCurrency(previewSub.amount)}</span>
+                <span className="font-bold text-slate-900">{formatCurrency(previewSub.payment_amount || previewSub.amount)}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Payment Source:</span>
+                <span className="font-semibold text-slate-800 uppercase">
+                  {previewSub.payment_source === 'razorpay' ? 'Razorpay Online' : 'Cash / Counter'}
+                </span>
+              </div>
+              {previewSub.payment_method && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Method:</span>
+                  <span className="font-semibold text-slate-800 uppercase">{previewSub.payment_method}</span>
+                </div>
+              )}
+              {previewSub.razorpay_payment_id && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Razorpay Payment ID:</span>
+                  <span className="font-mono font-bold text-sky-700">{previewSub.razorpay_payment_id}</span>
+                </div>
+              )}
+              {previewSub.razorpay_order_id && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Razorpay Order ID:</span>
+                  <span className="font-mono text-slate-600">{previewSub.razorpay_order_id}</span>
+                </div>
+              )}
+              {previewSub.payment_paid_at && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Payment Paid At:</span>
+                  <span className="font-medium text-slate-700">{formatDateShort(previewSub.payment_paid_at)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-500">Uploaded:</span>
                 <span className="font-medium text-slate-700">{formatDateShort(previewSub.uploaded_at)}</span>
@@ -677,10 +726,24 @@ export default function AdminAllSubmissionsPage() {
                 <span className="font-semibold text-slate-700">Payment Status:</span>
                 <PaymentStatusSelector
                   currentStatus={previewSub.payment_status}
+                  paymentSource={previewSub.payment_source}
+                  paymentMethod={previewSub.payment_method}
+                  razorpayPaymentId={previewSub.razorpay_payment_id}
                   submissionId={previewSub.id}
-                  onStatusChange={async (newStatus) => {
-                    await handleUpdateStatus(previewSub.id, { payment_status: newStatus });
-                    setPreviewSub((prev) => prev ? { ...prev, payment_status: newStatus } : null);
+                  onStatusChange={async (newStatus, newSource) => {
+                    await handleUpdateStatus(previewSub.id, {
+                      payment_status: newStatus,
+                      payment_source: newSource,
+                    });
+                    setPreviewSub((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            payment_status: newStatus,
+                            payment_source: newSource || prev.payment_source,
+                          }
+                        : null
+                    );
                   }}
                 />
               </div>

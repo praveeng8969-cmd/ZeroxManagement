@@ -43,9 +43,17 @@ create table if not exists public.submissions (
     mime_type text not null,
     page_count integer not null default 1 check (page_count > 0),
     amount numeric(10, 2) not null default 41.50 check (amount >= 0),
+    payment_amount numeric(10, 2),
+    payment_currency text not null default 'INR',
+    payment_source text not null default 'manual' check (payment_source in ('razorpay', 'cash', 'manual', 'online')),
+    razorpay_order_id text,
+    razorpay_payment_id text,
+    payment_method text,
+    payment_verified_at timestamptz,
+    payment_paid_at timestamptz,
     submission_status text not null default 'Uploaded' check (submission_status in ('Uploaded', 'Verified', 'Rejected')),
     xerox_status text not null default 'Pending' check (xerox_status in ('Pending', 'Ready to Print', 'Printed', 'Taken')),
-    payment_status text not null default 'Pending' check (payment_status in ('Pending', 'Paid')),
+    payment_status text not null default 'Pending' check (payment_status in ('Pending', 'Paid', 'Failed', 'Refunded', 'pending', 'paid', 'failed', 'refunded')),
     uploaded_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
     constraint uq_section_roll unique (upload_section_id, roll_number)
@@ -55,23 +63,50 @@ create table if not exists public.submissions (
 create index if not exists idx_submissions_section on public.submissions (upload_section_id);
 create index if not exists idx_submissions_roll on public.submissions (roll_number);
 create index if not exists idx_submissions_statuses on public.submissions (submission_status, xerox_status, payment_status);
+create index if not exists idx_submissions_razorpay_order on public.submissions (razorpay_order_id);
+create index if not exists idx_submissions_razorpay_payment on public.submissions (razorpay_payment_id);
+create index if not exists idx_submissions_payment_source on public.submissions (payment_source);
 
 -- Safe migration for projects created with an older schema.
 alter table public.submissions add column if not exists page_count integer not null default 1;
 alter table public.submissions add column if not exists amount numeric(10, 2) not null default 41.50;
+alter table public.submissions add column if not exists payment_amount numeric(10, 2);
+alter table public.submissions add column if not exists payment_currency text not null default 'INR';
+alter table public.submissions add column if not exists payment_source text not null default 'manual';
+alter table public.submissions add column if not exists razorpay_order_id text;
+alter table public.submissions add column if not exists razorpay_payment_id text;
+alter table public.submissions add column if not exists payment_method text;
+alter table public.submissions add column if not exists payment_verified_at timestamptz;
+alter table public.submissions add column if not exists payment_paid_at timestamptz;
 
 -- 3. PAYMENTS AUDIT TABLE (Optional extension for fine-grained tracking)
 create table if not exists public.payments (
     id uuid primary key default gen_random_uuid(),
     submission_id uuid not null references public.submissions(id) on delete cascade,
     amount numeric(10, 2) not null,
-    payment_status text not null default 'Pending' check (payment_status in ('Pending', 'Paid')),
+    payment_status text not null default 'Pending' check (payment_status in ('Pending', 'Paid', 'Failed', 'Refunded')),
     payment_method text default 'Cash',
     paid_at timestamptz,
     updated_at timestamptz not null default now()
 );
 
--- 4. AUTO-UPDATE TIMESTAMP FUNCTION
+-- 4. WEBHOOK IDEMPOTENCY TABLE
+create table if not exists public.payment_webhook_events (
+    id uuid primary key default gen_random_uuid(),
+    event_key text not null unique,
+    event_type text not null,
+    razorpay_payment_id text,
+    razorpay_order_id text,
+    received_at timestamptz not null default now(),
+    processed_at timestamptz default now(),
+    status text not null default 'processed',
+    payload jsonb
+);
+
+create index if not exists idx_payment_webhook_events_key on public.payment_webhook_events (event_key);
+create index if not exists idx_payment_webhook_events_order on public.payment_webhook_events (razorpay_order_id);
+
+-- 5. AUTO-UPDATE TIMESTAMP FUNCTION
 create or replace function public.handle_updated_at()
 returns trigger as $$
 begin
@@ -95,6 +130,7 @@ create or replace trigger tr_submissions_updated_at
 alter table public.upload_sections enable row level security;
 alter table public.submissions enable row level security;
 alter table public.payments enable row level security;
+alter table public.payment_webhook_events enable row level security;
 
 -- Upload Sections:
 -- Anyone (public) can read active upload sections
@@ -134,6 +170,13 @@ create policy "Public can update/replace their own submission"
 -- Authenticated admins can do anything with submissions
 create policy "Admins have full access to submissions"
     on public.submissions for all
+    to authenticated
+    using (true)
+    with check (true);
+
+-- Webhook events: Authenticated admins/service role only
+create policy "Admins have full access to webhook events"
+    on public.payment_webhook_events for all
     to authenticated
     using (true)
     with check (true);

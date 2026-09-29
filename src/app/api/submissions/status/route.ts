@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { supabase as publicSupabase, isSupabaseConfigured } from '@/lib/supabase/client';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -12,6 +14,9 @@ export async function POST(request: NextRequest) {
         submission_status?: string;
         xerox_status?: string;
         payment_status?: string;
+        payment_source?: string;
+        payment_method?: string;
+        payment_paid_at?: string;
       };
     };
 
@@ -22,10 +27,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...updates,
       updated_at: new Date().toISOString(),
     };
+
+    if (updates.payment_status === 'Paid' && !updates.payment_paid_at) {
+      payload.payment_paid_at = new Date().toISOString();
+    }
 
     // Try service role client first (bypasses RLS)
     let dbSuccess = false;

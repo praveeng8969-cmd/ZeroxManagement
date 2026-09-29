@@ -7,6 +7,7 @@ import {
   FileStatus,
   XeroxStatus,
   PaymentStatus,
+  PaymentSource,
 } from '@/types';
 import { supabase, isSupabaseConfigured } from './supabase/client';
 import { calculatePrintAmount } from './utils';
@@ -555,6 +556,9 @@ export const DataStore = {
       mime_type: params.mimeType,
       page_count: params.pageCount,
       amount,
+      payment_amount: amount,
+      payment_currency: 'INR',
+      payment_source: 'manual',
       submission_status: 'Uploaded',
       xerox_status: 'Pending',
       payment_status: params.payment_status || 'Pending',
@@ -580,6 +584,9 @@ export const DataStore = {
       submission_status?: FileStatus;
       xerox_status?: XeroxStatus;
       payment_status?: PaymentStatus;
+      payment_source?: PaymentSource;
+      payment_method?: string;
+      payment_paid_at?: string;
     }
   ): Promise<Submission | null> {
     try {
@@ -794,17 +801,25 @@ export const DataStore = {
     let xerox_taken = 0;
     let expected_amount = 0;
     let received_amount = 0;
+    let online_received_amount = 0;
+    let manual_received_amount = 0;
 
     submissions.forEach((sub) => {
       if (sub.xerox_status === 'Ready to Print') ready_to_print++;
       if (sub.xerox_status === 'Printed') printed++;
       if (sub.xerox_status === 'Taken') xerox_taken++;
 
-      const amount = Number(sub.amount) || 0;
+      const amount = Number(sub.payment_amount) || Number(sub.amount) || 0;
       expected_amount += amount;
 
-      if (sub.payment_status === 'Paid') {
+      const isPaid = String(sub.payment_status || '').toLowerCase() === 'paid';
+      if (isPaid) {
         received_amount += amount;
+        if (sub.payment_source === 'razorpay') {
+          online_received_amount += amount;
+        } else {
+          manual_received_amount += amount;
+        }
       }
     });
 
@@ -819,6 +834,8 @@ export const DataStore = {
       expected_amount,
       received_amount,
       pending_amount,
+      online_received_amount,
+      manual_received_amount,
     };
   },
 
@@ -829,13 +846,16 @@ export const DataStore = {
     return sections.map((sec) => {
       const secSubs = submissions.filter((s) => s.upload_section_id === sec.id);
       const count = secSubs.length;
-      const paid = secSubs.filter((s) => s.payment_status === 'Paid').length;
+      const isPaid = (s: Submission) => String(s.payment_status || '').toLowerCase() === 'paid';
+      const getAmount = (s: Submission) => Number(s.payment_amount) || Number(s.amount) || 0;
+
+      const paid = secSubs.filter(isPaid).length;
       const pending = count - paid;
-      const expected = secSubs.reduce((total, sub) => total + (Number(sub.amount) || 0), 0);
+      const expected = secSubs.reduce((total, sub) => total + getAmount(sub), 0);
       const received = secSubs
-        .filter((sub) => sub.payment_status === 'Paid')
-        .reduce((total, sub) => total + (Number(sub.amount) || 0), 0);
-      const pendingAmt = expected - received;
+        .filter(isPaid)
+        .reduce((total, sub) => total + getAmount(sub), 0);
+      const pendingAmt = Math.max(0, expected - received);
 
       return {
         section_id: sec.id,

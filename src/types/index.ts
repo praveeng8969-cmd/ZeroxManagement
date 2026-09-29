@@ -4,7 +4,9 @@ export type FileStatus = 'Uploaded' | 'Verified' | 'Rejected';
 
 export type XeroxStatus = 'Pending' | 'Ready to Print' | 'Printed' | 'Taken';
 
-export type PaymentStatus = 'Pending' | 'Paid';
+export type PaymentStatus = 'Pending' | 'Paid' | 'Failed' | 'Refunded';
+
+export type PaymentSource = 'razorpay' | 'cash' | 'manual';
 
 export interface UploadSection {
   id: string;
@@ -36,6 +38,14 @@ export interface Submission {
   mime_type: string;
   page_count: number;
   amount: number;
+  payment_amount?: number;
+  payment_currency?: string;
+  payment_source?: PaymentSource;
+  razorpay_order_id?: string | null;
+  razorpay_payment_id?: string | null;
+  payment_method?: string | null;
+  payment_verified_at?: string | null;
+  payment_paid_at?: string | null;
   submission_status: FileStatus;
   xerox_status: XeroxStatus;
   payment_status: PaymentStatus;
@@ -53,6 +63,8 @@ export interface DashboardStats {
   expected_amount: number;
   received_amount: number;
   pending_amount: number;
+  online_received_amount?: number;
+  manual_received_amount?: number;
 }
 
 export interface SectionFinancialSummary {
@@ -88,4 +100,41 @@ export interface CreateSubmissionInput {
   department?: string;
   file: File;
   replace_existing?: boolean;
+}
+
+export interface RazorpayOrderResponse {
+  orderId: string;
+  amount: number; // in paise
+  currency: string;
+  keyId: string;
+  submissionId: string;
+  studentName: string;
+  studentRoll: string;
+  sectionTitle: string;
+  amountInRupees: number;
+}
+
+export interface PaymentVerificationRequest {
+  submissionId: string;
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+}
+
+export interface PaymentVerificationResponse {
+  success: boolean;
+  error?: string;
+  status?: PaymentStatus;
+  payment_id?: string;
+  order_id?: string;
+  amount?: number;
+  method?: string;
+}
+
+export interface PaymentSummary {
+  total_expected: number;
+  total_received: number;
+  total_pending: number;
+  online_received: number;
+  manual_received: number;
 }

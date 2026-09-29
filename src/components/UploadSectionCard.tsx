@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { UploadSection } from '@/types';
 import { StatusBadge } from './StatusBadge';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
-import { Calendar, FileText, UploadCloud, Users, ArrowRight, Lock, CheckCircle2 } from 'lucide-react';
+import { Calendar, FileText, UploadCloud, Users, ArrowRight, Lock } from 'lucide-react';
 
 interface UploadSectionCardProps {
   section: UploadSection;

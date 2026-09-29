@@ -1,5 +1,4 @@
 import React from 'react';
-import Link from 'next/link';
 import { Printer } from 'lucide-react';
 
 export function Footer() {
