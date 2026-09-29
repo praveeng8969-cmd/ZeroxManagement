@@ -249,10 +249,12 @@ export const DataStore = {
       submissions_count: 0,
     };
 
+    const { submissions_count: _subCount, ...dbInsertData } = newSection;
+
     if (isSupabaseConfigured() && supabase) {
       const { data, error } = await supabase
         .from('upload_sections')
-        .insert([newSection])
+        .insert([dbInsertData])
         .select()
         .single();
 
@@ -271,12 +273,14 @@ export const DataStore = {
   },
 
   async updateSection(id: string, updates: Partial<UploadSection>): Promise<UploadSection | null> {
+    const { submissions_count: _subCount, ...cleanUpdates } = updates;
+
     // 1. Try server API route
     try {
       const res = await fetch('/api/sections', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, updates }),
+        body: JSON.stringify({ id, updates: cleanUpdates }),
       });
       if (res.ok) {
         const json = await res.json();
@@ -298,7 +302,7 @@ export const DataStore = {
     if (isSupabaseConfigured() && supabase) {
       const { data, error } = await supabase
         .from('upload_sections')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update({ ...cleanUpdates, updated_at: new Date().toISOString() })
         .eq('id', id)
         .select()
         .single();

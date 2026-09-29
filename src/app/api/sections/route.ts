@@ -44,10 +44,12 @@ export async function POST(request: NextRequest) {
       submissions_count: 0,
     };
 
+    const { submissions_count: _subCount, ...dbInsertData } = newSection;
+
     const adminClient = await createAdminSupabaseClient();
     const { data, error } = await adminClient
       .from('upload_sections')
-      .insert([newSection])
+      .insert([dbInsertData])
       .select()
       .single();
 
@@ -73,10 +75,12 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Missing id or updates parameter' }, { status: 400 });
     }
 
+    const { submissions_count: _subCount, ...dbUpdates } = updates;
+
     const adminClient = await createAdminSupabaseClient();
     const { data, error } = await adminClient
       .from('upload_sections')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update({ ...dbUpdates, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single();
